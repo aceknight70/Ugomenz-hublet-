@@ -1,0 +1,2670 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  Image as ImageIcon, PlayCircle, Store, Bot, Share2, FileText, CreditCard,
+  Truck, ShieldAlert, Phone, Star, GraduationCap, Settings, Search,
+  MessageCircle, CheckCircle, Calendar, DollarSign, Lock, MapPin,
+  Clock, ArrowRight, Copy, Plus, Trash2, ThumbsUp, Check, Loader2, ArrowUpRight,
+  QrCode, BarChart2, Sliders
+} from 'lucide-react';
+import QRCode from 'qrcode';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell
+} from 'recharts';
+import { Product, Variant, BankDetails, Review, GMQuery, ManagerStatus, AnalyticsData, CampaignConfig } from './types';
+import { INITIAL_PRODUCTS, INITIAL_SHOWROOM_PHOTOS } from './initialData';
+import StaffWorkshopSuite from './components/StaffWorkshopSuite';
+
+// Constants
+const MGR_CODE = 'UGOMENZ2025';
+const MGR_KEY = 'qw123#@';
+const DEFAULT_PIN = '12345';
+
+const DEFAULT_CAMPAIGN: CampaignConfig = {
+  campaignActive: true,
+  campaignTag: 'Special Launch Showcase',
+  headline: 'NEW HP OMNIBOOK FLAGSHIP & LFP SOLAR MATRIX',
+  subHeadline: 'Experience maximum power with our newly arrived pure sine-wave inverters, heavy duty Deye LFP storage blocks and high efficiency Jinko panels. Select, build invoice, and schedule pickup directly.',
+  accentColor: '#E8600A',
+  accentHoverColor: '#ff7518',
+  storeName: 'UGOMENZ ELECTRONICS',
+  storeSubName: 'ELECTRO POINT · WARRI SHOPPING HUBLET',
+  tickerText: '🎉 WELCOME TO THE UGOMENZ DIGITAL HUBLET! CHOOSE, BUILD INVOICE AND SECURELY BOOK DIRECT DECO ROAD DELIVERIES! 🎉',
+  tickerActive: true,
+  themePreset: 'default',
+  snowAnimationActive: false,
+};
+
+
+export default function App() {
+  // ----------------------------------------------------
+  // APP STATE & STORAGE INITIALIZATION
+  // ----------------------------------------------------
+  const [hasEntered, setHasEntered] = useState<boolean>(() => {
+    return localStorage.getItem('ug_entered') === 'true';
+  });
+  const [animationCompleted, setAnimationCompleted] = useState<boolean>(false);
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    return localStorage.getItem('ug_last_tab') || 'gallery';
+  });
+
+  const [products, setProducts] = useState<Product[]>(() => {
+    const saved = localStorage.getItem('ug_products_list');
+    if (saved) return JSON.parse(saved);
+    localStorage.setItem('ug_products_list', JSON.stringify(INITIAL_PRODUCTS));
+    return INITIAL_PRODUCTS;
+  });
+
+  const [bank, setBank] = useState<BankDetails>(() => {
+    const saved = localStorage.getItem('ug_bank');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.accountName && parsed.accountName.toLowerCase().includes('hitech')) {
+        parsed.accountName = 'Ugomenz Electronics';
+        localStorage.setItem('ug_bank', JSON.stringify(parsed));
+      }
+      return parsed;
+    }
+    const defaultBank = {
+      bank: 'GTBank (GTB)',
+      accountNumber: '9006163631',
+      accountName: 'Ugomenz Electronics'
+    };
+    localStorage.setItem('ug_bank', JSON.stringify(defaultBank));
+    return defaultBank;
+  });
+
+  const [managers, setManagers] = useState<ManagerStatus>(() => {
+    const saved = localStorage.getItem('ug_mgr_status');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.manager) return parsed;
+    }
+    const defaultMgr: ManagerStatus = { manager: 'Available', financialAdvisor: 'Available', leadTechExpert: 'Available' };
+    localStorage.setItem('ug_mgr_status', JSON.stringify(defaultMgr));
+    return defaultMgr;
+  });
+
+  const [gmQueue, setGmQueue] = useState<GMQuery[]>(() => {
+    const saved = localStorage.getItem('ug_gm_queue');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [feedback, setFeedback] = useState<Review[]>(() => {
+    const saved = localStorage.getItem('ug_feedback');
+    if (saved) return JSON.parse(saved);
+    const defaultReviews: Review[] = [
+      { id: '1', rating: 5, comment: 'Exceptional solar bundle customer service! Jinko bifacial panels increased my daily output by 20%!', customerName: 'Dele Falode', dateStr: '2026-06-02' },
+      { id: '2', rating: 5, comment: 'Got my HP Omnibook flagship here. Outstanding customer care on WhatsApp.', customerName: 'Chima Obi', dateStr: '2026-06-08' },
+      { id: '3', rating: 4, comment: 'Reliable and authentic products. Fast pickup scheduling at Deco Road.', customerName: 'Amara Warri', dateStr: '2026-06-09' }
+    ];
+    localStorage.setItem('ug_feedback', JSON.stringify(defaultReviews));
+    return defaultReviews;
+  });
+
+  const [showroomPhotos, setShowroomPhotos] = useState<typeof INITIAL_SHOWROOM_PHOTOS>(() => {
+    const saved = localStorage.getItem('ug_extra_photos');
+    return saved ? JSON.parse(saved) : INITIAL_SHOWROOM_PHOTOS;
+  });
+
+  const [storeHours, setStoreHours] = useState<string>(() => {
+    return localStorage.getItem('ug_store_hours') || 'Monday - Saturday: 8:00 AM - 6:00 PM';
+  });
+
+  const [campaign, setCampaign] = useState<CampaignConfig>(() => {
+    const saved = localStorage.getItem('ug_campaign');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    localStorage.setItem('ug_campaign', JSON.stringify(DEFAULT_CAMPAIGN));
+    return DEFAULT_CAMPAIGN;
+  });
+
+  const handleUpdateCampaign = (updated: Partial<CampaignConfig>) => {
+    setCampaign(prev => {
+      const next = { ...prev, ...updated };
+      localStorage.setItem('ug_campaign', JSON.stringify(next));
+      return next;
+    });
+  };
+
+
+  // QR Code generator for vCard contacts
+  const [selectedContactForQr, setSelectedContactForQr] = useState<'manager' | 'financialAdvisor' | 'leadTechExpert'>('manager');
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  useEffect(() => {
+    let name = "Ugomenz Store Manager";
+    let phone = "+2349060672127";
+    let title = "Store Manager";
+    let note = "Official Store Manager for Ugomenz Electronics Warri.";
+
+    if (selectedContactForQr === 'financialAdvisor') {
+      name = "Ugomenz Financial Advisor";
+      phone = "+2347068767180";
+      title = "Financial Advisor";
+      note = "Financial advisor for Ugomenz Electronics. Validates payment transfer credits.";
+    } else if (selectedContactForQr === 'leadTechExpert') {
+      name = "Ugomenz Lead Tech Expert";
+      phone = "+2349060672127";
+      title = "Lead Technical Expert";
+      note = "Lead expert for solar consultation, inverters, batteries, and device setup.";
+    }
+
+    const vcardText = `BEGIN:VCARD
+VERSION:3.0
+N:${name};;;;
+FN:${name}
+ORG:Ugomenz Electronics
+TITLE:${title}
+TEL;TYPE=CELL,VOICE:${phone}
+ADR;TYPE=WORK:;;Deco Road, After Robinson Plaza;Warri;Delta State;;Nigeria
+NOTE:${note}
+URL:https://ais-pre-2j3m3mibeodeknr6bhy27n-391739015113.europe-west2.run.app
+END:VCARD`;
+
+    QRCode.toDataURL(vcardText, {
+      margin: 2,
+      width: 320,
+      color: {
+        dark: '#030712',
+        light: '#ffffff'
+      }
+    })
+    .then(url => {
+      setQrDataUrl(url);
+    })
+    .catch(err => {
+      console.error('Failed to generate vCard QR Code:', err);
+    });
+  }, [selectedContactForQr]);
+
+  // Analytics tracking structure
+  const [analytics, setAnalytics] = useState<AnalyticsData>(() => {
+    const saved = localStorage.getItem('ug_analytics_v2');
+    if (saved) return JSON.parse(saved);
+    return {
+      totalVisits: 0,
+      todayVisits: 0,
+      roomVisits: {},
+      visitTimestamps: []
+    };
+  });
+
+  // Track page entries in landing phase
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAnimationCompleted(true);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Initialize and update analytics
+  useEffect(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const lastSessionDate = localStorage.getItem('ug_last_visit_date');
+
+    setAnalytics(prev => {
+      let updatedTotal = prev.totalVisits;
+      let updatedToday = prev.todayVisits;
+
+      // Simple session indicator of new load
+      if (!sessionStorage.getItem('ug_session_active')) {
+        updatedTotal += 1;
+        sessionStorage.setItem('ug_session_active', 'true');
+        if (lastSessionDate !== todayStr) {
+          updatedToday = 1;
+          localStorage.setItem('ug_last_visit_date', todayStr);
+        } else {
+          updatedToday += 1;
+        }
+      }
+
+      const updated = {
+        ...prev,
+        totalVisits: updatedTotal,
+        todayVisits: updatedToday,
+      };
+      localStorage.setItem('ug_analytics_v2', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  // Track specific room visits
+  const recordRoomVisit = (roomId: string) => {
+    setAnalytics(prev => {
+      const roomCounts = { ...prev.roomVisits };
+      roomCounts[roomId] = (roomCounts[roomId] || 0) + 1;
+
+      const updatedTimestamps = [
+        new Date().toISOString(),
+        ...prev.visitTimestamps
+      ].slice(0, 100);
+
+      const updated = {
+        ...prev,
+        roomVisits: roomCounts,
+        visitTimestamps: updatedTimestamps
+      };
+      localStorage.setItem('ug_analytics_v2', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Watch tab updates
+  useEffect(() => {
+    if (hasEntered) {
+      localStorage.setItem('ug_last_tab', currentTab);
+      recordRoomVisit(currentTab);
+    }
+  }, [currentTab, hasEntered]);
+
+
+  // ----------------------------------------------------
+  // UTILITIES & WA LINK GENERATOR (Page 10)
+  // ----------------------------------------------------
+  const waLink = (number: string, message: string) => {
+    // Strips non-digit chars from number and encodes message parameter
+    const phone = number.replace(/\+/g, '').replace(/\s/g, '');
+    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  };
+
+  // ----------------------------------------------------
+  // ACTIVE GALLERY VIEW (Room 1)
+  // ----------------------------------------------------
+  const [selectedGalleryProductId, setSelectedGalleryProductId] = useState<string>(products[0]?.id || '');
+  const selectedGalleryProduct = useMemo(() => {
+    return products.find(p => p.id === selectedGalleryProductId) || products[0];
+  }, [products, selectedGalleryProductId]);
+
+  // Gallery Sub-states
+  const [activeGalleryColorIdx, setActiveGalleryColorIdx] = useState<number>(-1); // -1 is base product
+  const [selectedGalleryHeroImage, setSelectedGalleryHeroImage] = useState<string>(() => products[0]?.heroImage || '');
+  const [scale, setScale] = useState<number>(1);
+  const touchStartRef = useRef<number>(0);
+
+  // Gallery multi-angle auto slideshow states
+  const [isAutoplay, setIsAutoplay] = useState<boolean>(true);
+  const [isHoveringImage, setIsHoveringImage] = useState<boolean>(false);
+
+  // Helper functions for slide navigation
+  const handleNextAngle = () => {
+    if (productAngles.length <= 1) return;
+    const currentIndex = productAngles.findIndex(angle => angle.url === selectedGalleryHeroImage);
+    const nextIndex = (currentIndex + 1) % productAngles.length;
+    setSelectedGalleryHeroImage(productAngles[nextIndex].url);
+  };
+
+  const handlePrevAngle = () => {
+    if (productAngles.length <= 1) return;
+    const currentIndex = productAngles.findIndex(angle => angle.url === selectedGalleryHeroImage);
+    const prevIndex = currentIndex <= 0 ? productAngles.length - 1 : currentIndex - 1;
+    setSelectedGalleryHeroImage(productAngles[prevIndex].url);
+  };
+
+  // Set default gallery hero when tab, product or variant updates
+  useEffect(() => {
+    if (selectedGalleryProduct) {
+      if (activeGalleryColorIdx >= 0 && selectedGalleryProduct.variants[activeGalleryColorIdx]) {
+        setSelectedGalleryHeroImage(selectedGalleryProduct.variants[activeGalleryColorIdx].heroImage);
+      } else {
+        setSelectedGalleryHeroImage(selectedGalleryProduct.heroImage);
+      }
+      setScale(1);
+    }
+  }, [selectedGalleryProduct, activeGalleryColorIdx]);
+
+  // List of active angles (Hero, Side view, Back view, Close-up, Detail / Label)
+  const productAngles = useMemo(() => {
+    if (!selectedGalleryProduct) return [];
+    const sourceObj = activeGalleryColorIdx >= 0 && selectedGalleryProduct.variants[activeGalleryColorIdx]
+      ? selectedGalleryProduct.variants[activeGalleryColorIdx]
+      : selectedGalleryProduct;
+
+    return [
+      { name: 'Hero Shot', url: sourceObj.heroImage },
+      ...(sourceObj.angle2 ? [{ name: 'Side View', url: sourceObj.angle2 }] : []),
+      ...(sourceObj.angle3 ? [{ name: 'Back View', url: sourceObj.angle3 }] : []),
+      ...(sourceObj.angle4 ? [{ name: 'Close-up', url: sourceObj.angle4 }] : []),
+      ...(sourceObj.angle5 ? [{ name: 'Detail / Label', url: sourceObj.angle5 }] : [])
+    ];
+  }, [selectedGalleryProduct, activeGalleryColorIdx]);
+
+  // Gallery angle auto sliding effect
+  useEffect(() => {
+    if (!isAutoplay || isHoveringImage || scale > 1 || productAngles.length <= 1) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setSelectedGalleryHeroImage((curr) => {
+        const index = productAngles.findIndex(angle => angle.url === curr);
+        if (index === -1) {
+          return productAngles[0]?.url || '';
+        }
+        const nextIndex = (index + 1) % productAngles.length;
+        return productAngles[nextIndex]?.url || '';
+      });
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [isAutoplay, isHoveringImage, scale, productAngles]);
+
+  // ----------------------------------------------------
+  // VIDEOS (Room 2)
+  // ----------------------------------------------------
+  const [videoList, setVideoList] = useState<string[]>(() => {
+    const saved = localStorage.getItem('ug_uploaded_videos');
+    return saved ? JSON.parse(saved) : ['https://www.youtube.com/embed/dQw4w9WgXcQ']; // Placeholder walkthrough video
+  });
+
+  // ----------------------------------------------------
+  // SHOWROOM & masonry card filtering (Room 3 & S1 Suggestions)
+  // ----------------------------------------------------
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState(() => {
+    return localStorage.getItem('ug_showroom_category') || 'All';
+  });
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('ug_showroom_category', activeCategoryFilter);
+  }, [activeCategoryFilter]);
+
+  const categories = ['All', 'Laptops', 'Printers', 'Solar', 'Desktops', 'CCTV', 'Networking', 'Monitors', 'Accessories'];
+
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchCategory = activeCategoryFilter === 'All' || p.category.toLowerCase() === activeCategoryFilter.toLowerCase();
+      const matchQuery = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         (p.model && p.model.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                         p.description.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCategory && matchQuery;
+    });
+  }, [products, activeCategoryFilter, searchQuery]);
+
+  // ----------------------------------------------------
+  // CLIENT AI DESK (Room 4)
+  // ----------------------------------------------------
+  const [aiHistory, setAiHistory] = useState<{role: string, parts: {text: string}[]}[]>([]);
+  const [aiChatMessages, setAiChatMessages] = useState<{sender: 'user' | 'ai', text: string}[]>([
+    { sender: 'ai', text: 'Hello! Welcome to the Ugomenz Electronics Digital Assistant Desk. How may we serve you on products, solar installations, GTBank payments, or managers support in Warri today?' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [aiChatMessages]);
+
+  const handleSendAiMessage = async (msgText: string) => {
+    if (!msgText.trim()) return;
+    setAiChatMessages(prev => [...prev, { sender: 'user', text: msgText }]);
+    setChatInput('');
+    setIsAiLoading(true);
+
+    try {
+      const response = await fetch('/api/ai-desk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msgText,
+          history: aiHistory,
+          productsList: products.map(p => ({
+            name: p.name,
+            model: p.model,
+            price: p.price === 0 ? 'Call for Price' : `₦${p.price.toLocaleString()}`,
+            stockStatus: p.stockStatus,
+            category: p.category
+          }))
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.text) {
+        setAiChatMessages(prev => [...prev, { sender: 'ai', text: data.text }]);
+        setAiHistory(prev => [
+          ...prev,
+          { role: 'user', parts: [{ text: msgText }] },
+          { role: 'model', parts: [{ text: data.text }] }
+        ]);
+      } else {
+        throw new Error(data.error || 'Server error speaking to Gemini');
+      }
+    } catch (err: any) {
+      // Intelligent Offline Fail-safe / fallback rules-based response engine (makes sure the app remains functional!)
+      const query = msgText.toLowerCase();
+      let fallbackResponse = "I am ready to help. Our showroom is open Monday through Saturday, 8am to 6pm, located on Deco Road after Robinson Plaza in Warri. You can pay into Ugomenz Electronics GTBank Account: 9006163631. Please tap to chat live with our Manager!";
+
+      if (query.includes('omnibook') || query.includes('hp')) {
+        fallbackResponse = `We have outstanding HP options including our flagship HP Omnibook Ultra Flip 14 (₦890,000) and the versatile HP Envy x360 (₦730,000). To confirm direct real-time availability in the showroom, please tap to enquire via WhatsApp!`;
+      } else if (query.includes('solar') || query.includes('panel') || query.includes('inverter') || query.includes('battery')) {
+        fallbackResponse = `Our complete Solar solutions include the premium Jinko 450W Bifacial panel (₦68,000 per panel), Felicity 3.5kVA Pure Sine Wave Inverters (₦185,000) and high density Deye Lithium Iron LFP batteries. Let us arrange a technical consultation with our team!`;
+      } else if (query.includes('pay') || query.includes('account') || query.includes('bank') || query.includes('invoice')) {
+        fallbackResponse = `To complete purchases: Transfer into GTBank, Account: ${bank.accountNumber}, Name: ${bank.accountName}. Then proceed to submit your payment slip under the Invoice Room or tap 'I Have Paid' to create digital receipts.`;
+      } else if (query.includes('hours') || query.includes('time') || query.includes('open')) {
+        fallbackResponse = `Our Warri showroom hours are: ${storeHours}. Feel free to drop by Deco Road after Robinson Plaza!`;
+      } else if (query.includes('contact') || query.includes('manager') || query.includes('phone') || query.includes('number') || query.includes('expert')) {
+        fallbackResponse = `You can directly reach our Manager at +2349060672127, our Financial Advisor at +2347068767180, or our Lead Tech Expert at +2349060672127.`;
+      }
+
+      setAiChatMessages(prev => [
+        ...prev,
+        { sender: 'ai', text: fallbackResponse }
+      ]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // ----------------------------------------------------
+  // SOCIAL CHANNELS (Room 5)
+  // ----------------------------------------------------
+  const [socialsState, setSocialsState] = useState(() => {
+    const saved = localStorage.getItem('ug_socials_config_v2');
+    if (saved) return JSON.parse(saved);
+    const defaults = [
+      { id: 'wa', name: 'WhatsApp Sales Channel', info: 'Direct link to Manager', iconName: 'ThumbsUp', color: 'bg-emerald-600', link: 'https://wa.me/2349060672127?text=Hello%20Ugomenz%20Electronics%20support%20desk!%20I%20am%2520visiting%20from%20your%20official%20Digital%20Hublet.' },
+      { id: 'fb', name: 'Facebook', info: 'Ugomenz Electronics official page', iconName: 'Share2', color: 'bg-blue-600', link: 'https://facebook.com' },
+      { id: 'ig', name: 'Instagram', info: '@ugomenzelectronics official showcase', iconName: 'ImageIcon', color: 'bg-gradient-to-tr from-yellow-500 to-purple-600', link: 'https://instagram.com' },
+      { id: 'tt', name: 'TikTok', info: '@ugomenzelectronics tech demos', iconName: 'PlayCircle', color: 'bg-zinc-900', link: 'https://tiktok.com' },
+      { id: 'yt', name: 'YouTube', info: 'Product demonstrations & unpackings', iconName: 'PlayCircle', color: 'bg-red-600', link: 'https://youtube.com' },
+      { id: 'web', name: 'Official Website', info: 'ugomenzelectronics.com (Planned Phase 3)', iconName: 'Store', color: 'bg-indigo-700', link: '#' }
+    ];
+    localStorage.setItem('ug_socials_config_v2', JSON.stringify(defaults));
+    return defaults;
+  });
+
+  const getSocialIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'ThumbsUp': return ThumbsUp;
+      case 'Share2': return Share2;
+      case 'ImageIcon': return ImageIcon;
+      case 'PlayCircle': return PlayCircle;
+      case 'GraduationCap': return GraduationCap;
+      case 'Store': return Store;
+      default: return Share2;
+    }
+  };
+
+  const SOCIALS = socialsState.map(s => ({
+    name: s.name,
+    info: s.info,
+    icon: getSocialIcon(s.iconName),
+    color: s.color,
+    link: s.link
+  }));
+
+  // ----------------------------------------------------
+  // INVOICE PAYMENT FLOW (Room 7)
+  // ----------------------------------------------------
+  const [copiedInvoice, setCopiedInvoice] = useState(false);
+  const [buyerName, setBuyerName] = useState('');
+  const [payAmount, setPayAmount] = useState('');
+  const [receiptGenerated, setReceiptGenerated] = useState<any | null>(null);
+
+  const handleCopyAccount = () => {
+    navigator.clipboard.writeText(bank.accountNumber);
+    setCopiedInvoice(true);
+    setTimeout(() => setCopiedInvoice(false), 2000);
+  };
+
+  const handleConfirmPaid = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!buyerName.trim() || !payAmount) return;
+
+    const receipt = {
+      receiptNo: `UGM-${Math.floor(Math.random() * 89999) + 10000}`,
+      buyer: buyerName,
+      amount: Number(payAmount),
+      dateStr: new Date().toLocaleDateString('en-NG', { dateStyle: 'medium' }),
+      bank: bank.bank,
+      accountNo: bank.accountNumber,
+    };
+
+    setReceiptGenerated(receipt);
+  };
+
+  // ----------------------------------------------------
+  // PICKUP SCHEDULING (Room 8)
+  // ----------------------------------------------------
+  const [pickupName, setPickupName] = useState('');
+  const [pickupPhone, setPickupPhone] = useState('');
+  const [pickupProduct, setPickupProduct] = useState('');
+  const [pickupMethod, setPickupMethod] = useState('Store Pickup (Deco Road)');
+  const [pickupDate, setPickupDate] = useState('');
+
+  const sendPickupScheduleLink = (e: React.FormEvent) => {
+    e.preventDefault();
+    const message = `UGOMENZ HUBLET PICKUP REQUEST:\n` +
+      `- Client: ${pickupName}\n` +
+      `- Contact: ${pickupPhone}\n` +
+      `- Selected Device: ${pickupProduct}\n` +
+      `- Dispatch Mode: ${pickupMethod}\n` +
+      `- Planned Date: ${pickupDate}\n`;
+    window.open(waLink('+2349060672127', message), '_blank');
+  };
+
+  // ----------------------------------------------------
+  // WARRANTY CLAIMS (Room 9)
+  // ----------------------------------------------------
+  const [warrantyProduct, setWarrantyProduct] = useState('');
+  const [warrantyDate, setWarrantyDate] = useState('');
+  const [warrantySerial, setWarrantySerial] = useState('');
+  const [warrantyReason, setWarrantyReason] = useState('');
+
+  const sendWarrantyWhatsApp = (e: React.FormEvent) => {
+    e.preventDefault();
+    const message = `UGOMENZ WARRANTY REGISTRATION / CLAIM:\n` +
+      `- Model / Item: ${warrantyProduct}\n` +
+      `- Date Bought: ${warrantyDate}\n` +
+      `- S/N or IMEI: ${warrantySerial}\n` +
+      `- Issue Description: ${warrantyReason}`;
+    window.open(waLink('+2349060672127', message), '_blank');
+  };
+
+  // ----------------------------------------------------
+  // GENERAL MANAGER QUEUE SYSTEM (Room 10)
+  // ----------------------------------------------------
+  const [gmQueryName, setGmQueryName] = useState('');
+  const [gmQueryPhone, setGmQueryPhone] = useState('');
+  const [gmQuerySubject, setGmQuerySubject] = useState('');
+  const [gmQueryMsg, setGmQueryMsg] = useState('');
+  const [submittedGmStatus, setSubmittedGmStatus] = useState(false);
+
+  const handleSubmitGmQuery = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gmQueryName || !gmQueryPhone || !gmQueryMsg) return;
+
+    const newQuery: GMQuery = {
+      id: `GMQ-${Date.now()}`,
+      customerName: gmQueryName,
+      whatsappNumber: gmQueryPhone,
+      subject: gmQuerySubject || 'General Inquiry',
+      message: gmQueryMsg,
+      timestamp: new Date().toLocaleString(),
+      status: 'Pending'
+    };
+
+    const updated = [newQuery, ...gmQueue];
+    setGmQueue(updated);
+    localStorage.setItem('ug_gm_queue', JSON.stringify(updated));
+
+    setGmQueryName('');
+    setGmQueryPhone('');
+    setGmQuerySubject('');
+    setGmQueryMsg('');
+    setSubmittedGmStatus(true);
+    setTimeout(() => setSubmittedGmStatus(false), 5000);
+  };
+
+  // ----------------------------------------------------
+  // RATINGS & FEEDBACKS (Room 11)
+  // ----------------------------------------------------
+  const [fbName, setFbName] = useState('');
+  const [fbStars, setFbStars] = useState(5);
+  const [fbComment, setFbComment] = useState('');
+
+  const handleSubmitFeedback = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fbName.trim() || !fbComment.trim()) return;
+
+    const newFb: Review = {
+      id: `RFB-${Date.now()}`,
+      rating: fbStars,
+      comment: fbComment,
+      customerName: fbName,
+      dateStr: new Date().toISOString().split('T')[0]
+    };
+
+    const updated = [newFb, ...feedback];
+    setFeedback(updated);
+    localStorage.setItem('ug_feedback', JSON.stringify(updated));
+
+    setFbName('');
+    setFbComment('');
+    setFbStars(5);
+  };
+
+  const avgReviewRating = useMemo(() => {
+    if (feedback.length === 0) return 5;
+    const total = feedback.reduce((sum, r) => sum + r.rating, 0);
+    return Number((total / feedback.length).toFixed(1));
+  }, [feedback]);
+
+  // ----------------------------------------------------
+  // ADMIN STAFF PORTAL LOCKED (Room 13)
+  // ----------------------------------------------------
+  const [staffCode, setStaffCode] = useState('');
+  const [staffKey, setStaffKey] = useState('');
+  const [staffPin, setStaffPin] = useState('');
+  const [isStaffAuthenticated, setIsStaffAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('ug_staff_auth') === 'true';
+  });
+  const [staffTab, setStaffTab] = useState<'campaign' | 'catalog' | 'analytics' | 'experts' | 'tickets'>('campaign');
+  const [campaignWorkbenchTab, setCampaignWorkbenchTab] = useState<'presets' | 'tickers' | 'products' | 'videos' | 'socials'>('presets');
+  const [spreadsheetSearch, setSpreadsheetSearch] = useState('');
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    model: '',
+    price: 0,
+    promoPrice: 0,
+    category: 'Laptops',
+    stockStatus: 'In Stock' as 'In Stock' | 'Out of Stock',
+    description: '',
+    heroImage: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
+    angle2: '',
+    angle3: '',
+    angle4: '',
+    angle5: '',
+    variants: [] as Variant[]
+  });
+  const [tempVariant, setTempVariant] = useState({
+    colorName: '',
+    sku: '',
+    heroImage: 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80',
+    angle2: '',
+    angle3: '',
+    angle4: '',
+    angle5: ''
+  });
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [selectedAnglePhotoUrl, setSelectedAnglePhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (quickViewProduct) {
+      setSelectedVariantId(null);
+      setSelectedAnglePhotoUrl(null);
+    }
+  }, [quickViewProduct]);
+
+  const [staffError, setStaffError] = useState('');
+
+  const handleStaffLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (staffCode === MGR_CODE && staffKey === MGR_KEY && staffPin === DEFAULT_PIN) {
+      setIsStaffAuthenticated(true);
+      localStorage.setItem('ug_staff_auth', 'true');
+      setStaffError('');
+    } else {
+      setStaffError('Incorrect Code, Key, or PIN combination. Try again.');
+    }
+  };
+
+  const handleStaffLogout = () => {
+    setIsStaffAuthenticated(false);
+    localStorage.removeItem('ug_staff_auth');
+    setStaffCode('');
+    setStaffKey('');
+    setStaffPin('');
+  };
+
+  // Admin overrides helpers
+  const handleUpdatePrice = (prodId: string, newPrice: number) => {
+    const updated = products.map(p => {
+      if (p.id === prodId) return { ...p, price: newPrice };
+      return p;
+    });
+    setProducts(updated);
+    localStorage.setItem('ug_products_list', JSON.stringify(updated));
+  };
+
+  const handleUpdateStock = (prodId: string, isStock: 'In Stock' | 'Out of Stock') => {
+    const updated = products.map(p => {
+      if (p.id === prodId) return { ...p, stockStatus: isStock };
+      return p;
+    });
+    setProducts(updated);
+    localStorage.setItem('ug_products_list', JSON.stringify(updated));
+  };
+
+  const handleUpdateBank = (updatedDetails: BankDetails) => {
+    setBank(updatedDetails);
+    localStorage.setItem('ug_bank', JSON.stringify(updatedDetails));
+  };
+
+  const handleToggleManagerStatus = (role: 'manager' | 'financialAdvisor' | 'leadTechExpert') => {
+    const updated = {
+      ...managers,
+      [role]: managers[role] === 'Available' ? 'Busy' : 'Available'
+    };
+    setManagers(updated);
+    localStorage.setItem('ug_mgr_status', JSON.stringify(updated));
+  };
+
+  const handleDeleteGmQuery = (id: string) => {
+    const updated = gmQueue.filter(q => q.id !== id);
+    setGmQueue(updated);
+    localStorage.setItem('ug_gm_queue', JSON.stringify(updated));
+  };
+
+  // Real-time photo upload base64 encoding (Page 8)
+  const handleAddGalleryPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        const newPhotoItem = {
+          id: `custom-photo-${Date.now()}`,
+          title: `Upload Photo - ${new Date().toLocaleDateString()}`,
+          description: 'Uploaded directly by Staff Member.',
+          imageUrl: base64String
+        };
+        const updated = [newPhotoItem, ...showroomPhotos];
+        setShowroomPhotos(updated);
+        localStorage.setItem('ug_extra_photos', JSON.stringify(updated));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Recharts analytic transformations
+  const chartRoomData = useMemo(() => {
+    return Object.entries(analytics.roomVisits).map(([room, count]) => ({
+      room: room.toUpperCase(),
+      visits: count
+    }));
+  }, [analytics]);
+
+  const COLORS = ['#E8600A', '#003087', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
+
+
+  // ----------------------------------------------------
+  // LANDING PAGE SCREEN (Page 2)
+  // ----------------------------------------------------
+  if (!hasEntered) {
+    return (
+      <div id="landing-screen" className="min-h-screen bg-[#060B18] flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden select-none">
+        {/* Dynamic backdrop gradient spots & Grid Overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(0,48,135,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(0,48,135,0.06)_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+        
+        {/* Moving glowing orbits simulation (Background) */}
+        <div className="absolute top-1/4 left-1/4 w-[16rem] sm:w-[24rem] h-[16rem] sm:h-[24rem] rounded-full bg-[#003087]/15 filter blur-[90px] animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-[18rem] sm:w-[26rem] h-[18rem] sm:h-[26rem] rounded-full bg-[#E8600A]/12 filter blur-[110px] animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] h-[30rem] rounded-full bg-indigo-500/[0.03] filter blur-[140px]"></div>
+
+        {/* Outer subtle decorative frame */}
+        <div className="absolute inset-4 border border-white/[0.02] rounded-[2.5rem] pointer-events-none z-0"></div>
+
+        {/* MAIN MATTE GLASSMORPHISM CONTAINER */}
+        <div className="z-10 w-full max-w-lg bg-zinc-950/40 backdrop-blur-3xl border border-white/[0.08] rounded-3xl p-6 sm:p-10 shadow-[0_30px_70px_rgba(0,0,0,0.6)] flex flex-col items-center gap-6 relative overflow-hidden transition-all duration-500 hover:border-white/[0.12]">
+          
+          {/* Accent decoration line */}
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#E8600A] to-transparent"></div>
+
+          {/* Top Header Label */}
+          <div className="text-center space-y-1 mt-1">
+            <p className="text-[#E8600A] text-[10px] sm:text-xs tracking-[0.3em] font-syne font-black uppercase text-center">
+              Ugomenz Hublet &bull; v2.1
+            </p>
+            <p className="text-zinc-500 text-[9px] sm:text-[10px] tracking-wider uppercase font-mono">
+              ESGMC &bull; Fortune Akioya (FATAP-CT)
+            </p>
+          </div>
+
+          {/* Central Logo & Orbit Drawing Animation */}
+          <div className="relative w-36 sm:w-44 h-36 sm:h-44 flex items-center justify-center my-2 group">
+            {/* Pulsating outer laser/glowing ring decor */}
+            <div className="absolute inset-0 rounded-full border border-[#E8600A]/20 scale-105 animate-pulse"></div>
+            <div className="absolute inset-3 rounded-full border border-dashed border-zinc-800/60 animate-[spin_40s_linear_infinite]"></div>
+            
+            {/* SVG custom letter 'U' stroke draw */}
+            <svg className="w-32 h-32 sm:w-40 sm:h-40 stroke-[#E8600A] fill-none stroke-[7] animate-uGlow relative z-10" viewBox="0 0 100 100">
+              <path
+                d="M 25 15 L 25 60 A 25 25 0 0 0 75 60 L 75 15"
+                strokeLinecap="round"
+                className="animate-uDraw"
+              />
+            </svg>
+            
+            {/* GOMENZ lettering aligned inside the U-curve */}
+            <div className="absolute top-[38%] left-1/2 transform -translate-x-1/2 mt-4 z-20">
+              <span className="text-white text-2xl sm:text-3xl font-syne tracking-[0.15em] uppercase font-black animate-fadeUp opacity-0 select-none pointer-events-none drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]" style={{ animationDelay: '1.2s' }}>
+                GOMENZ
+              </span>
+            </div>
+          </div>
+
+          {/* Branding Texts */}
+          <div className="animate-fadeUp opacity-0 space-y-2 text-center w-full" style={{ animationDelay: '1.6s' }}>
+            <h1 className="text-2xl sm:text-3.5xl text-white font-syne tracking-tight font-black uppercase">
+              UGOMENZ MALL
+            </h1>
+            <div className="flex items-center justify-center gap-3">
+              <span className="h-px w-10 bg-zinc-800"></span>
+              <span className="text-[#E8600A] font-syne text-[10px] sm:text-xs uppercase tracking-[0.2em] font-extrabold">
+                Electro Point
+              </span>
+              <span className="h-px w-10 bg-zinc-800"></span>
+            </div>
+            <p className="text-zinc-400 text-xs sm:text-sm tracking-wider font-medium">
+              Premium Electronics &bull; Deco Road, Warri
+            </p>
+          </div>
+
+          {/* Showcase Building Exterior Panel */}
+          <div className="w-full h-28 sm:h-32 rounded-2xl border border-zinc-800/80 bg-[#0c1428] relative overflow-hidden flex items-end p-3 animate-scaleIn opacity-0 shadow-xl group/building" style={{ animationDelay: '1.4s' }}>
+            <img
+              src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=600&q=80"
+              alt="Ugomenz Showroom Exterior"
+              className="absolute inset-0 w-full h-full object-cover opacity-45 grayscale-[20%] transition-transform duration-700 ease-out group-hover/building:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/30 to-transparent"></div>
+            
+            <div className="relative z-10 w-full flex justify-between items-end">
+              <div>
+                <p className="text-[9px] text-[#E8600A] font-extrabold tracking-widest uppercase">Deco Road Plaza</p>
+                <p className="text-xs text-white font-bold font-syne uppercase">Ugomenz Showroom</p>
+              </div>
+              <div className="flex gap-1 flex-wrap justify-end max-w-[65%]">
+                {['Brühm', 'Sharp', 'Tamashi', 'Beko'].map(tag => (
+                  <span key={tag} className="text-[8px] bg-[#003087]/65 text-zinc-100 border border-white/[0.08] px-2 py-0.5 rounded font-extrabold tracking-tight">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* CTA Interactive Button */}
+          <button
+            id="enter-button"
+            className="w-full py-3.5 sm:py-4 px-6 bg-[#E8600A] text-white font-syne font-black text-xs sm:text-sm uppercase tracking-widest rounded-xl shadow-lg shadow-[#E8600A]/35 hover:bg-[#ff7518] hover:shadow-[#E8600A]/50 hover:scale-[1.02] active:scale-[0.98] transition-all pulse-button cursor-pointer flex items-center justify-center gap-2"
+            onClick={() => {
+              setHasEntered(true);
+              localStorage.setItem('ug_entered', 'true');
+            }}
+          >
+            Enter Ugomenz Hublet
+            <ArrowRight className="w-4 h-4 text-white hover:translate-x-1 transition-transform" />
+          </button>
+
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------
+  // MAIN CORE APPLICATION (Tabs)
+  // ----------------------------------------------------
+  return (
+    <div className="min-h-screen bg-[#0A0F1E] text-white flex flex-col relative pb-28 md:pb-32 font-sans select-text">
+      {/* Dynamic Theme Styles Override */}
+      <style>{`
+        :root {
+          --accent-primary: ${campaign.accentColor};
+          --accent-hover: ${campaign.accentHoverColor};
+        }
+        .text-\[\#E8600A\] { color: ${campaign.accentColor} !important; }
+        .text-orange-500 { color: ${campaign.accentColor} !important; }
+        .bg-\[\#E8600A\], .bg-\[\#E8605A\] { background-color: ${campaign.accentColor} !important; }
+        .bg-[#E8600A], .bg-[#E8605A] { background-color: ${campaign.accentColor} !important; }
+        .bg-orange-600 { background-color: ${campaign.accentColor} !important; }
+        .border-\[\#E8600A\] { border-color: ${campaign.accentColor} !important; }
+        .border-orange-500 { border-color: ${campaign.accentColor} !important; }
+        .focus\:border-\[\#E8600A\]:focus { border-color: ${campaign.accentColor} !important; }
+        .focus\:ring-\[\#E8600A\]:focus { --tw-ring-color: ${campaign.accentColor} !important; }
+        .hover\:bg-\[\#E8600A\]:hover { background-color: ${campaign.accentColor} !important; }
+        .hover\:border-\[\#E8600A\]:hover { border-color: ${campaign.accentColor} !important; }
+        .hover\:shadow-\[\#E8600A\]\/5:hover { --tw-shadow-color: ${campaign.accentColor}11 !important; }
+        .hover\:bg-\[\#ff7518\]:hover { background-color: ${campaign.accentHoverColor} !important; }
+        .bg-\[\#E8600A\]\/10 { background-color: ${campaign.accentColor}1a !important; }
+        .bg-\[\#E8600A\]\/20 { background-color: ${campaign.accentColor}33 !important; }
+        .border-\[\#E8600A\]\/20 { border-color: ${campaign.accentColor}33 !important; }
+        .border-\[\#E8600A\]\/30 { border-color: ${campaign.accentColor}4d !important; }
+        .shadow-\[\#E8600A\]\/20 { --tw-shadow: 0 4px 6px -1px ${campaign.accentColor}33, 0 2px 4px -1px ${campaign.accentColor}33 !important; }
+        .shadow-\[\#E8600A\]\/35 { --tw-shadow: 0 10px 15px -3px ${campaign.accentColor}59, 0 4px 6px -2px ${campaign.accentColor}59 !important; }
+        
+        @keyframes marquee {
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(-33.333%, 0, 0); }
+        }
+        .animate-marquee {
+          display: inline-flex;
+          animation: marquee 25s linear infinite;
+        }
+        .animate-marquee:hover {
+          animation-play-state: paused;
+        }
+
+        /* Holiday Decorations */
+        .holiday-particle {
+          position: fixed;
+          top: -20px;
+          pointer-events: none;
+          z-index: 9999;
+          animation: fall linear infinite;
+        }
+        @keyframes fall {
+          to {
+            transform: translateY(105vh) rotate(360deg);
+          }
+        }
+      `}</style>
+
+      {/* Holiday falling decorations engine */}
+      {campaign.snowAnimationActive && campaign.themePreset !== 'default' && (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-20">
+          {Array.from({ length: 25 }).map((_, i) => {
+            const emojis = {
+              christmas: ['❄️', '🎄', '🎁', '✨'],
+              independence: ['🇳🇬', '🟢', '⚪', '💚'],
+              valentine: ['❤️', '💖', '🌹', '💕'],
+              blackfriday: ['⚡', '🛍️', '🔥', '💰'],
+            };
+            const list = emojis[campaign.themePreset as keyof typeof emojis] || ['❄️'];
+            const emoji = list[i % list.length];
+            const size = Math.random() * 14 + 10;
+            const left = Math.random() * 100;
+            const duration = Math.random() * 8 + 6;
+            const delay = Math.random() * 8;
+            return (
+              <span
+                key={i}
+                className="holiday-particle select-none"
+                style={{
+                  left: `${left}%`,
+                  fontSize: `${size}px`,
+                  animationDuration: `${duration}s`,
+                  animationDelay: `${delay}s`,
+                  opacity: Math.random() * 0.6 + 0.4
+                }}
+              >
+                {emoji}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Dynamic Animated Campaign Marquee Ticker */}
+      {campaign.tickerActive && campaign.tickerText && (
+        <div className="bg-yellow-400 text-black py-1.5 px-4 text-xs font-bold font-syne select-none overflow-hidden relative border-b border-yellow-500 flex items-center shadow-inner z-55">
+          <div className="whitespace-nowrap animate-marquee flex gap-12">
+            <span>{campaign.tickerText}</span>
+            <span>{campaign.tickerText}</span>
+            <span>{campaign.tickerText}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Off-line notification panel (Suggestion S10) */}
+      <noscript>
+        <div className="bg-red-900/80 text-white text-xs px-4 py-2 text-center sticky top-0 z-50">
+          For full interactive capability, please enable JavaScript.
+        </div>
+      </noscript>
+
+      {/* Top Brand bar */}
+      <header className="bg-[#003087]/90 backdrop-blur border-b border-zinc-800 text-white py-3 px-4 sm:px-6 sticky top-0 z-40 shadow-md">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-[#E8600A] text-white flex items-center justify-center font-syne font-extrabold text-xl shadow-md border border-white/10">
+              U
+            </div>
+            <div>
+              <h2 className="text-base font-syne tracking-widest font-bold uppercase flex items-center gap-2">
+                {campaign.storeName}
+              </h2>
+              <p className="text-[10px] text-zinc-300 tracking-wider">
+                {campaign.storeSubName}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5 text-zinc-300">
+              <MapPin className="w-3.5 h-3.5 text-[#E8600A]" />
+              Deco Road Plaza, Warri
+            </span>
+            <span className="h-4 w-px bg-zinc-700 hidden sm:inline"></span>
+            <span className="flex items-center gap-1.5 text-zinc-300">
+              <Clock className="w-3.5 h-3.5 text-[#E8600A]" />
+              Open 8AM - 6PM
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* Hero promo banner shown on top of Gallery & Showroom */}
+      {campaign.campaignActive && (currentTab === 'showroom' || currentTab === 'gallery') && (
+        <div className="max-w-7xl mx-auto w-full px-4 pt-6">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#003087] via-[#05143a] to-[#0A0F1E] border border-zinc-800 p-6 md:p-8 flex flex-col justify-center items-start shadow-xl">
+            <div className="absolute right-0 top-0 w-1/2 h-full opacity-10 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500 to-transparent"></div>
+            <span className="bg-[#E8600A] text-white text-[10px] font-syne tracking-widest uppercase px-3 py-1 rounded-full font-bold mb-3">
+              {campaign.campaignTag}
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-syne font-black tracking-tight mb-2 uppercase">
+              {campaign.headline}
+            </h2>
+            <p className="text-zinc-300 text-sm max-w-2xl mb-4 leading-relaxed">
+              {campaign.subHeadline}
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setCurrentTab('infoDesk')}
+                className="bg-transparent hover:bg-white/10 text-white border border-white/20 text-xs font-syne font-bold uppercase tracking-wider px-4 py-2.5 rounded-lg transition-all"
+              >
+                Inquire via AI Desk
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Primary content router */}
+      <main className="flex-grow max-w-7xl mx-auto w-full p-4">
+        {/* ROOM 1: GALLERY */}
+        {currentTab === 'gallery' && (
+          <div id="room-gallery" className="space-y-6 animate-scaleIn">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0F172A] p-4 rounded-xl border border-zinc-800">
+              <div>
+                <h3 className="text-lg font-syne font-extrabold uppercase">Product Interactive Inspection</h3>
+                <p className="text-xs text-zinc-400">Pinch or scale to inspect multi-angles & variant sets prior to shopping.</p>
+              </div>
+              <div className="w-full sm:w-auto">
+                <select
+                  value={selectedGalleryProductId}
+                  onChange={e => {
+                    setSelectedGalleryProductId(e.target.value);
+                    setActiveGalleryColorIdx(-1);
+                  }}
+                  className="w-full sm:w-64 bg-[#0A0F1E] text-white text-xs border border-zinc-700 rounded-lg p-2.5 focus:outline-none focus:border-[#E8600A]"
+                >
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} {p.price > 0 ? `(₦${p.price.toLocaleString()})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {selectedGalleryProduct ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Visual Canvas layout Page 3 (1 Hero + 3-4 Angle Shots) */}
+                <div className="lg:col-span-8 space-y-4">
+                  <div
+                    onMouseEnter={() => setIsHoveringImage(true)}
+                    onMouseLeave={() => setIsHoveringImage(false)}
+                    className="bg-[#050B18] border border-zinc-800 rounded-2xl overflow-hidden relative group flex items-center justify-center p-3 aspect-video select-none"
+                  >
+                    {/* The primary gallery image with fade-in on transition */}
+                    <img
+                      key={`gallery-img-${selectedGalleryHeroImage}`}
+                      src={selectedGalleryHeroImage}
+                      alt={selectedGalleryProduct.name}
+                      style={{ transform: `scale(${scale})` }}
+                      className="max-h-full max-w-full object-contain rounded-xl transition-all duration-300 animate-fadeIn"
+                    />
+
+                    {/* Navigation Buttons (Left & Right chevrons) visible on hover */}
+                    {productAngles.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePrevAngle();
+                          }}
+                          className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-[#E8600A] text-white border border-zinc-800 opacity-0 group-hover:opacity-100 transition-all duration-250 cursor-pointer flex items-center justify-center z-10 hover:scale-105 active:scale-95"
+                          title="Previous Angle"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNextAngle();
+                          }}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-[#E8600A] text-white border border-zinc-800 opacity-0 group-hover:opacity-100 transition-all duration-250 cursor-pointer flex items-center justify-center z-10 hover:scale-105 active:scale-95"
+                          title="Next Angle"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                      </>
+                    )}
+
+                    {/* Scale slider (Simulated Touch pinch and zoom) */}
+                    <div className="absolute bottom-4 right-4 bg-black/70 backdrop-blur rounded-lg p-2 border border-zinc-800 flex items-center gap-2 z-10">
+                      <span className="text-[10px] text-zinc-400 uppercase font-bold">Zoom: {scale}x</span>
+                      <input
+                        type="range"
+                        min="1"
+                        max="3"
+                        step="0.1"
+                        value={scale}
+                        onChange={e => setScale(Number(e.target.value))}
+                        className="w-20 accent-[#E8600A]"
+                      />
+                    </div>
+
+                    {/* Autoplay Controls: Sleek Badge Overlay with Pause/Play Indicator */}
+                    {productAngles.length > 1 && (
+                      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsAutoplay(!isAutoplay);
+                          }}
+                          className={`px-2.5 py-1.5 rounded-lg border text-[10px] uppercase font-bold tracking-wider font-mono flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur ${
+                            isAutoplay
+                              ? 'bg-[#E8600A]/20 hover:bg-[#E8600A]/30 border-[#E8600A]/40 text-[#E8600A]'
+                              : 'bg-zinc-950/80 hover:bg-zinc-900 border-zinc-800 text-zinc-400'
+                          }`}
+                          title={isAutoplay ? "Pause Auto-Slide" : "Play Auto-Slide"}
+                        >
+                          {isAutoplay ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#E8600A] animate-pulse" />
+                              <span>Auto sliding</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                              <span>Autoplay Paused</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="absolute top-4 left-4 bg-[#E8600A] text-white text-xs font-syne font-extrabold px-3 py-1.5 rounded-lg shadow-md uppercase z-10">
+                      ₦{(activeGalleryColorIdx >= 0 && selectedGalleryProduct.variants[activeGalleryColorIdx] ? selectedGalleryProduct.price : selectedGalleryProduct.price).toLocaleString()}
+                    </div>
+
+                    {/* Active slide progress line bar indicating autoplay cycle countdown */}
+                    {isAutoplay && !isHoveringImage && scale === 1 && productAngles.length > 1 && (
+                       <div
+                        key={`gallery-bar-${selectedGalleryHeroImage}`}
+                        className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-[#E8600A] to-orange-500 animate-slideProgress"
+                      />
+                    )}
+                  </div>
+
+                  {/* VARIANT SQUARES ZONE (6 slots) - Page 3 */}
+                  <div className="bg-[#0F172A] p-4 rounded-xl border border-zinc-800 space-y-3">
+                    <p className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                      VARIANT ZONE — 6 Smaller Slots (Colors / Models / SKUs)
+                    </p>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                      {/* Active base variant slot */}
+                      <button
+                        onClick={() => setActiveGalleryColorIdx(-1)}
+                        className={`p-1.5 rounded-lg border bg-[#050B18] transition-all flex flex-col items-center justify-center text-center ${activeGalleryColorIdx === -1 ? 'border-[#E8600A] ring-1 ring-[#E8600A]' : 'border-zinc-800 hover:border-zinc-700'}`}
+                      >
+                        <img src={selectedGalleryProduct.heroImage} alt="Base" className="w-10 h-10 object-contain rounded" />
+                        <span className="text-[9px] text-zinc-400 font-semibold mt-1 truncate max-w-full">Default</span>
+                      </button>
+
+                      {/* Explicit Variant list */}
+                      {selectedGalleryProduct.variants.map((variant, i) => (
+                        <button
+                          key={variant.id}
+                          onClick={() => setActiveGalleryColorIdx(i)}
+                          className={`p-1.5 rounded-lg border bg-[#050B18] transition-all flex flex-col items-center justify-center text-center ${activeGalleryColorIdx === i ? 'border-[#E8600A] ring-1 ring-[#E8600A]' : 'border-zinc-800 hover:border-zinc-700'}`}
+                        >
+                          <img src={variant.heroImage} alt={variant.colorName} className="w-10 h-10 object-contain rounded" />
+                          <span className="text-[9px] text-[#E8600A] font-bold mt-1 truncate max-w-full">{variant.colorName}</span>
+                        </button>
+                      ))}
+
+                      {/* Unset placeholder slots */}
+                      {Array.from({ length: Math.max(0, 5 - selectedGalleryProduct.variants.length) }).map((_, placeholderIdx) => (
+                        <div
+                          key={`unset-${placeholderIdx}`}
+                          onClick={() => setCurrentTab('staff')}
+                          className="p-1.5 rounded-lg border border-dashed border-zinc-800/80 bg-[#0A0F1E]/50 flex flex-col items-center justify-center text-center text-zinc-600 hover:text-zinc-500 hover:border-zinc-700 cursor-pointer transition-all"
+                        >
+                          <Plus className="w-5 h-5 mb-1" />
+                          <span className="text-[8px] uppercase font-bold tracking-tight">Add Variant</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Side Angle panel */}
+                <div className="lg:col-span-4 space-y-4">
+                  <div className="bg-[#0F172A] p-5 rounded-2xl border border-zinc-800 space-y-4">
+                    <div>
+                      <span className="text-[10px] text-[#E8600A] font-syne uppercase tracking-widest font-extrabold">{selectedGalleryProduct.category}</span>
+                      <h4 className="text-xl font-syne font-black uppercase text-white mt-1">{selectedGalleryProduct.name}</h4>
+                      {selectedGalleryProduct.model && (
+                        <p className="text-xs text-zinc-500 font-mono mt-0.5">{selectedGalleryProduct.model}</p>
+                      )}
+                    </div>
+
+                    <div className="border-t border-b border-zinc-800 py-3 flex justify-between items-center">
+                      <span className="text-xs text-zinc-400">Stock Availability:</span>
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${selectedGalleryProduct.stockStatus === 'In Stock' ? 'text-green-400' : 'text-zinc-500'}`}>
+                        <span className={`w-2 h-2 rounded-full ${selectedGalleryProduct.stockStatus === 'In Stock' ? 'bg-[#25D366]' : 'bg-zinc-600'}`}></span>
+                        {selectedGalleryProduct.stockStatus}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      {selectedGalleryProduct.description}
+                    </p>
+
+                     {/* ANGLE VIEW ZONE (Page 3) */}
+                    <div className="space-y-2">
+                      <p className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                        ANGLE CLUSTER — Select view
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {productAngles.map((angle) => (
+                          <button
+                            key={angle.name}
+                            type="button"
+                            onClick={() => {
+                              setSelectedGalleryHeroImage(angle.url);
+                              setIsAutoplay(false);
+                            }}
+                            className={`p-2 rounded-lg border bg-[#050B18] flex items-center gap-2 text-left transition-all cursor-pointer ${
+                              selectedGalleryHeroImage === angle.url
+                                ? 'border-[#E8600A] text-[#E8600A] font-bold'
+                                : 'border-zinc-800 hover:border-zinc-700 text-zinc-400'
+                            }`}
+                          >
+                            <span className="text-[10px] font-bold uppercase">{angle.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 space-y-2">
+                      <a
+                        href={waLink('+2349060672127', `Hello Ugomenz support, I am interested in checking out the ${selectedGalleryProduct.name} in your showroom.`)}
+                        target="_blank"
+                        className="w-full py-3 px-4 bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        Inquire on WhatsApp
+                      </a>
+                      <button
+                        onClick={() => setCurrentTab('invoice')}
+                        className="w-full py-3 px-4 bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        Purchase now (Invoice)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-center text-zinc-500 py-12">No products loaded.</p>
+            )}
+          </div>
+        )}
+
+        {/* ROOM 2: VIDEOS */}
+        {currentTab === 'videos' && (() => {
+          const getEmbedUrl = (url: string) => {
+            if (!url) return 'https://www.youtube.com/embed/dQw4w9WgXcQ';
+            if (url.includes('youtube.com/embed/')) return url;
+            if (url.includes('youtu.be/')) {
+              const parts = url.split('youtu.be/');
+              const id = parts[1]?.split(/[?#]/)[0];
+              return `https://www.youtube.com/embed/${id}`;
+            }
+            if (url.includes('youtube.com/watch')) {
+              try {
+                const urlObj = new URL(url);
+                const id = urlObj.searchParams.get('v');
+                if (id) return `https://www.youtube.com/embed/${id}`;
+              } catch (e) {}
+            }
+            return url;
+          };
+
+          return (
+            <div id="room-videos" className="space-y-6 animate-scaleIn max-w-4xl mx-auto">
+              <div className="text-center space-y-2">
+                <h3 className="text-2xl font-syne font-black uppercase text-white">Ugomenz Store Walkthroughs</h3>
+                <p className="text-sm text-zinc-400">Review video inspections of our respective department corners at Deco Road, Warri.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {videoList.map((video, idx) => (
+                  <div key={`video-item-${idx}`} className="bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl shadow-xl space-y-4 flex flex-col justify-between">
+                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-800 relative">
+                      <iframe
+                        title={`Ugomenz Store Walkthrough ${idx + 1}`}
+                        src={getEmbedUrl(video)}
+                        allowFullScreen
+                        className="w-full h-full"
+                      ></iframe>
+                    </div>
+
+                    <div className="border-t border-zinc-800/60 pt-3 flex justify-between items-center text-xs">
+                      <div>
+                        <h4 className="text-xs font-syne uppercase font-bold text-white">Department Tour Segment #{idx + 1}</h4>
+                        <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Deco Road Showroom Segment</p>
+                      </div>
+                      <span className="bg-[#E8600A]/10 text-[#E8600A] text-[9px] font-bold py-1 px-2.5 rounded-full uppercase border border-[#E8600A]/20 font-sans">
+                        Live Feed
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-center pt-4">
+                <button
+                  onClick={() => setCurrentTab('staff')}
+                  className="text-xs text-[#E8600A] font-bold font-syne uppercase border border-[#E8600A]/30 hover:bg-[#E8600A]/10 px-6 py-3 rounded-xl transition-all cursor-pointer"
+                >
+                  Configure Videography Walkthroughs &rarr;
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ROOM 3: SHOWROOM */}
+        {currentTab === 'showroom' && (
+          <div id="room-[#showroom]" className="space-y-6 animate-scaleIn">
+            <div className="space-y-4">
+              {/* Category Filter Bar */}
+              <div className="sticky top-16 z-30 bg-[#0A0F1E] py-2">
+                <div className="flex gap-2 overflow-x-auto no-scrollbar scroll-smooth pb-1 border-b border-zinc-800/80">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setActiveCategoryFilter(cat)}
+                      className={`px-4 py-2 text-xs font-syne font-extrabold uppercase tracking-widest rounded-full border shrink-0 transition-all ${activeCategoryFilter === cat ? 'bg-[#E8600A] border-[#E8600A] text-white' : 'border-[#003087] text-zinc-400 hover:text-white hover:border-zinc-700'}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 w-4.5 h-4.5" />
+                <input
+                  type="text"
+                  placeholder="Search HP laptops, bifacial panels, printers, batteries, CCTV..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full bg-[#0F172A] text-white pl-10 pr-4 py-3 text-xs rounded-xl border border-zinc-800 placeholder-zinc-500 focus:outline-none focus:border-[#E8600A] focus:ring-1 focus:ring-[#E8600A] transition-all"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs font-bold px-2 py-1 bg-zinc-800 rounded">
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* PINTEREST MASONRY GRID (4 columns, variable heights) - Page 5 */}
+            {filteredProducts.length > 0 ? (
+              <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+                {filteredProducts.map((prod) => {
+                  // Determine height variant based on product details matching wireframe heights
+                  let heightClass = "aspect-square";
+                  if (prod.id === 'hp-omnibook' || prod.id === 'jinko-solar-450w' || prod.id === 'deye-lithium-battery') {
+                    heightClass = "aspect-[3/4]"; // Taller heights for flagship products (Page 5)
+                  } else if (prod.id === 'hp-foldable-pc' || prod.id === 'kp3-mini-ups') {
+                    heightClass = "aspect-[4/3]"; // Shorter horizontal profiles
+                  }
+
+                  return (
+                    <div
+                      key={`gallery-product-card-${prod.id}`}
+                      onClick={() => {
+                        setQuickViewProduct(prod);
+                        recordRoomVisit(`quick_view_${prod.id}`);
+                      }}
+                      className="break-inside-avoid bg-[#0F172A] border border-zinc-800/80 hover:border-[#E8600A] hover:shadow-lg hover:shadow-[#E8600A]/5 rounded-2xl overflow-hidden relative group cursor-pointer transition-all flex flex-col"
+                    >
+                      {/* Product full-bleed face */}
+                      <div className={`relative ${heightClass} bg-[#050B18] overflow-hidden`}>
+                        <img
+                          src={prod.heroImage}
+                          alt={prod.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent"></div>
+
+                        {/* Floating orange price badge bottom-left */}
+                        <div className="absolute bottom-3 left-3 bg-[#E8600A] text-white text-xs font-syne font-extrabold px-3 py-1.5 rounded-lg shadow-md">
+                          {prod.price === 0 ? 'Call for Price' : `₦${prod.price.toLocaleString()}`}
+                        </div>
+
+                        {/* Stock dot */}
+                        <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-[10px] text-white px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 font-bold">
+                          <span className={`w-1.5 h-1.5 rounded-full ${prod.stockStatus === 'In Stock' ? 'bg-[#25D366]' : 'bg-zinc-600'}`}></span>
+                          {prod.stockStatus === 'In Stock' ? 'In Stock' : 'Out of Stock'}
+                        </div>
+                      </div>
+
+                      {/* Information Overlay */}
+                      <div className="p-4 space-y-2 flex-grow flex flex-col justify-between">
+                        <div>
+                          <p className="text-[10px] text-zinc-500 font-mono mt-0.5 uppercase">{prod.model || 'Model'}</p>
+                          <h4 className="text-white text-sm font-syne uppercase font-bold group-hover:text-[#E8600A] transition-colors">
+                            {prod.name}
+                          </h4>
+                        </div>
+
+                        {/* Fast checkout links */}
+                        <div className="flex gap-2 pt-2 border-t border-zinc-800/80">
+                          <a
+                            href={waLink('+2349060672127', `Hi support, I want to inquire about: ${prod.name} (Price: ₦${prod.price.toLocaleString()}).`)}
+                            target="_blank"
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-zinc-800/80 hover:bg-[#25D366] hover:text-white p-2.5 rounded-xl border border-zinc-700/50 flex-grow text-center text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            WhatsApp
+                          </a>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentTab('invoice');
+                            }}
+                            className="bg-[#003087] hover:bg-[#E8600A] text-white px-3 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all"
+                          >
+                            Buy
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center text-zinc-500 py-12">No products matched your inquiry.</p>
+            )}
+
+            {/* Banner of Store walkthrough photos Page 4 */}
+            <div className="bg-[#050D1D] p-5 rounded-2xl border border-zinc-800 space-y-4">
+              <div>
+                <h4 className="text-sm font-syne uppercase font-bold tracking-widest text-[#E8600A]">
+                  UGOMENZ MALL INTERIOR AT A GLANCE
+                </h4>
+                <p className="text-xs text-zinc-400">Actual site photographs from Deco road showroom.</p>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {showroomPhotos.slice(0, 4).map((ph, i) => (
+                  <div key={`showroom-photo-${ph.id || i}`} className="group relative rounded-xl overflow-hidden border border-zinc-800 aspect-video bg-[#0A0F1E]">
+                    <img src={ph.imageUrl} alt={ph.title} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-zinc-950/20 to-transparent"></div>
+                    <div className="absolute bottom-2 left-2 text-[10px]">
+                      <p className="text-white font-bold">{ph.title}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ROOM 4: AI DESK */}
+        {currentTab === 'infoDesk' && (
+          <div id="room-infoDesk" className="space-y-4 animate-scaleIn max-w-3xl mx-auto">
+            <div className="bg-[#0F172A] border border-zinc-800 p-4 rounded-xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#E8600A]/20 flex items-center justify-center text-[#E8600A]">
+                <Bot className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-sm font-syne font-extrabold uppercase">AI Assistant Support Desk</h3>
+                <p className="text-xs text-zinc-400">Powered by server-side Gemini intelligence. Get real-time stock estimates, bank credentials & support hours.</p>
+              </div>
+            </div>
+
+            {/* Conversation list */}
+            <div className="bg-[#050B18] border border-zinc-800 rounded-2xl flex flex-col h-[400px] overflow-hidden">
+              <div className="flex-grow overflow-y-auto p-4 space-y-4">
+                {aiChatMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] rounded-2xl p-4 text-xs leading-relaxed ${msg.sender === 'user' ? 'bg-[#E8600A] text-white rounded-br-none' : 'bg-[#1E293B] text-zinc-150 rounded-bl-none border border-zinc-800'}`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                {isAiLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-[#1E293B] border border-zinc-800 rounded-2xl rounded-bl-none p-4 flex items-center gap-2 text-xs text-zinc-400">
+                      <Loader2 className="w-4 h-4 animate-spin text-[#E8600A]" />
+                      Assistant thinking...
+                    </div>
+                  </div>
+                )}
+                <div ref={chatBottomRef} />
+              </div>
+
+              {/* Chat Input form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (chatInput.trim()) handleSendAiMessage(chatInput);
+                }}
+                className="p-3 border-t border-zinc-800 bg-[#0F172A] flex gap-2"
+              >
+                <input
+                  type="text"
+                  placeholder="Ask about HP Laptops, Inverter packs, GTBank numbers, or business hours..."
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  className="flex-grow bg-[#0A0F1E] border border-zinc-700 text-xs px-4 py-3 rounded-xl focus:outline-none focus:border-[#E8600A] text-white"
+                />
+                <button
+                  type="submit"
+                  disabled={isAiLoading || !chatInput.trim()}
+                  className="bg-[#E8600A] hover:bg-[#ff7518] text-white px-4 py-3 rounded-xl text-xs font-syne font-extrabold uppercase tracking-wider transition-all disabled:opacity-40"
+                >
+                  Send
+                </button>
+              </form>
+            </div>
+
+            {/* Context helpers */}
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest pl-1">Suggestion Queries</p>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {[
+                  'What are the specifications of HP Omnibook flagship?',
+                  'Recommend a solar panel inverter bundle package',
+                  'Show me physical store location and opening hours',
+                  'What is the Ugomenz Electronics bank details for transfer?'
+                ].map(item => (
+                  <button
+                    key={item}
+                    onClick={() => handleSendAiMessage(item)}
+                    className="bg-zinc-800/80 hover:bg-[#003087] hover:text-white text-zinc-300 border border-zinc-700/50 px-3 py-2 rounded-xl text-left font-medium transition-all"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ROOM 5: CHANNEL */}
+        {currentTab === 'channel' && (
+          <div id="room-[#channel]" className="space-y-6 animate-scaleIn max-w-4xl mx-auto">
+            <div className="text-center space-y-1">
+              <h3 className="text-xl font-syne font-black uppercase text-white">Ugomenz Official Social Platforms</h3>
+              <p className="text-xs text-zinc-400">Join our lists to stay updated about hot arrival price lists in Warri.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {SOCIALS.map((soc) => (
+                <a
+                  key={soc.name}
+                  href={soc.link}
+                  target={soc.link !== '#' ? '_blank' : undefined}
+                  rel="noopener noreferrer"
+                  className="bg-[#0F172A] border border-zinc-800 hover:border-[#E8600A] p-5 rounded-2xl flex flex-col items-center justify-center text-center group transition-all"
+                >
+                  <div className={`w-12 h-12 rounded-full ${soc.color} text-white flex items-center justify-center mb-4 transition-transform group-hover:scale-110 shadow-lg`}>
+                    <soc.icon className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-syne font-extrabold uppercase text-sm text-white group-hover:text-[#E8600A] transition-colors">{soc.name}</h4>
+                  <p className="text-[11px] text-zinc-500 mt-1">{soc.info}</p>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ROOM 6: LIVE SHEET */}
+        {currentTab === 'livesheet' && (
+          <div id="room-[#livesheet]" className="space-y-6 animate-scaleIn">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0F172A] p-4 rounded-xl border border-zinc-800">
+              <div>
+                <h3 className="text-sm font-syne font-extrabold uppercase">Live Price List & Reference coordinates</h3>
+                <p className="text-xs text-zinc-400">Synchronized directly with the showroom price manifests.</p>
+              </div>
+              <a
+                href="https://sheets.google.com"
+                target="_blank"
+                className="bg-[#25D366] hover:bg-[#1eba4e] text-white text-xs font-syne font-extrabold uppercase px-4 py-2.5 rounded-lg flex items-center gap-2 tracking-wider shadow-lg transition-all"
+              >
+                <FileText className="w-4 h-4" />
+                Go to Google spreadsheet
+              </a>
+            </div>
+
+            <div className="bg-[#050B18] rounded-xl border border-zinc-800 overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#003087]/50 border-b border-zinc-800 text-white font-syne uppercase">
+                      <th className="p-4 font-extrabold">Product Name</th>
+                      <th className="p-4 font-extrabold">Category</th>
+                      <th className="p-4 font-extrabold">Official Price</th>
+                      <th className="p-4 font-extrabold">Status</th>
+                      <th className="p-4 font-extrabold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((p, i) => (
+                      <tr key={`product-spec-row-${p.id}`} className="border-b border-zinc-800 hover:bg-[#0F172A]/50 transition-colors">
+                        <td className="p-4 font-semibold text-white">
+                          <div>
+                            <p>{p.name}</p>
+                            {p.model && <p className="text-[9px] text-zinc-500 font-mono mt-0.5">{p.model}</p>}
+                          </div>
+                        </td>
+                        <td className="p-4 text-zinc-400 capitalize">{p.category}</td>
+                        <td className="p-4 font-bold text-[#E8600A]">
+                          {p.price === 0 ? 'Call for Price' : `₦${p.price.toLocaleString()}`}
+                        </td>
+                        <td className="p-4">
+                          <span className={`inline-flex items-center gap-1 text-[10px] uppercase font-bold ${p.stockStatus === 'In Stock' ? 'text-green-400' : 'text-zinc-500'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${p.stockStatus === 'In Stock' ? 'bg-[#25D366]' : 'bg-zinc-600'}`}></span>
+                            {p.stockStatus}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => {
+                              setSelectedGalleryProductId(p.id);
+                              setCurrentTab('gallery');
+                            }}
+                            className="bg-zinc-800 hover:bg-[#003087] text-white px-2.5 py-1 rounded text-[10px] font-syne uppercase font-extrabold transition-all"
+                          >
+                            View Gallery
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ROOM 7: INVOICE */}
+        {currentTab === 'invoice' && (
+          <div id="room-invoice" className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-scaleIn">
+            {/* Payment Coordinates instructions */}
+            <div className="md:col-span-7 bg-[#0F172A] border border-zinc-800 p-6 rounded-2xl space-y-6 shadow-xl">
+              <div className="space-y-1">
+                <span className="text-[10px] text-[#E8600A] font-syne uppercase tracking-widest font-extrabold">Room 7 PAYMENT ROUTING</span>
+                <h3 className="text-xl font-syne font-black uppercase text-white">Direct GTBank Payment coordination</h3>
+                <p className="text-xs text-zinc-400">Complete transfer, generate receipt and register status with manager.</p>
+              </div>
+
+              <div className="bg-[#050B18] border border-zinc-800 p-5 rounded-xl space-y-4">
+                <div className="flex justify-between items-center bg-zinc-900/60 p-3 rounded-lg border border-zinc-800">
+                  <div>
+                    <p className="text-[10px] text-[#E8600A] font-bold uppercase tracking-wider">UGOMENZ GTB ACCOUNT</p>
+                    <p className="text-base text-white tracking-widest font-mono font-bold mt-1">{bank.accountNumber}</p>
+                    <p className="text-xs text-zinc-400 mt-1 uppercase font-semibold">{bank.accountName}</p>
+                    <p className="text-[10px] text-green-400 italic mt-0.5 mt-2">● Verified Company Account</p>
+                  </div>
+                  <button
+                    onClick={handleCopyAccount}
+                    className="p-3 bg-[#E8600A] hover:bg-[#ff7518] text-white rounded-lg transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer text-xs font-bold"
+                  >
+                    {copiedInvoice ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {copiedInvoice ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 text-xs">
+                  <p className="text-zinc-300 font-bold uppercase">PAYMENT STEPS SHOWN TO CUSTOMER:</p>
+                  <ol className="list-decimal pl-4 space-y-2 text-zinc-400">
+                    <li>Copy verified GTB account number using the copy button above.</li>
+                    <li>Open your smartphone bank application and perform transfer.</li>
+                    <li>Come back here, enter your credentials in the &apos;I Have Paid&apos; sheet on the right to auto-generate a digital slip receipt.</li>
+                    <li>Tap &apos;Send slip to Sales Manager&apos; via pre-filled WhatsApp link immediately.</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            {/* Receipt Creator Form */}
+            <div className="md:col-span-5 space-y-4">
+              <div className="bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl space-y-4 shadow-xl">
+                <h4 className="text-sm font-syne font-extrabold uppercase text-white">I HAVE PAID SHEET</h4>
+                <form onSubmit={handleConfirmPaid} className="space-y-3.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Customer/Buyer Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Fortune Akioya"
+                      value={buyerName}
+                      onChange={e => setBuyerName(e.target.value)}
+                      className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Total Paid Amount (₦)</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="e.g. 890000"
+                      value={payAmount}
+                      onChange={e => setPayAmount(e.target.value)}
+                      className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-3 px-4 bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl transition-all"
+                  >
+                    Generate digital transaction receipt
+                  </button>
+                </form>
+              </div>
+
+              {receiptGenerated && (
+                <div className="bg-emerald-950/40 border border-[#25D366]/40 p-5 rounded-2xl space-y-4 shadow-md text-xs">
+                  <div className="flex justify-between items-center text-emerald-400 font-bold">
+                    <span className="font-syne uppercase">Receipt Generated Successfully!</span>
+                    <CheckCircle className="w-4 h-4" />
+                  </div>
+
+                  <div className="bg-[#050B18] border border-zinc-800 p-4 rounded-xl space-y-2 font-mono">
+                    <p className="border-b border-zinc-800 pb-1 text-[#E8600A] font-bold">UGOMENZ MALL TRANSACTION SLIP</p>
+                    <p><span className="text-zinc-500">Receipt No:</span> {receiptGenerated.receiptNo}</p>
+                    <p><span className="text-zinc-500">Full Name:</span> {receiptGenerated.buyer}</p>
+                    <p><span className="text-zinc-500">Sum Paid:</span> ₦{receiptGenerated.amount.toLocaleString()}</p>
+                    <p><span className="text-zinc-500">Bank:</span> {receiptGenerated.bank}</p>
+                    <p><span className="text-zinc-500">Date:</span> {receiptGenerated.dateStr}</p>
+                  </div>
+
+                  <a
+                    href={waLink('+2347068767180', `HI FINANCIAL ADVISOR, I CONFIRM I HAVE MADE GTB TRANSFER FOR PAYMENT VALUE ₦${receiptGenerated.amount.toLocaleString()}. REGISTERED RECEIPT: ${receiptGenerated.receiptNo} UNDER BUYER NAME: ${receiptGenerated.buyer}.`)}
+                    target="_blank"
+                    className="w-full py-2.5 px-4 bg-[#25D366] hover:bg-[#1fba4f] text-white text-xs font-syne uppercase font-extrabold tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition-all text-center"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Send Transaction Receipt on WhatsApp
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ROOM 8: PICKUP */}
+        {currentTab === 'pickup' && (
+          <div id="room-[#pickup]" className="max-w-xl mx-auto bg-[#0F172A] border border-zinc-800 p-6 rounded-2xl space-y-6 shadow-xl animate-scaleIn">
+            <div className="space-y-1">
+              <span className="text-[10px] text-[#E8600A] font-syne uppercase tracking-widest font-extrabold">Room 8 Dispatch & Delivery</span>
+              <h3 className="text-xl font-syne font-black uppercase text-white">Arrange Pickup / Delivery schedule</h3>
+              <p className="text-xs text-zinc-400">Instruct our dispatch unit on warehousing collection or door-to-door courier.</p>
+            </div>
+
+            <form onSubmit={sendPickupScheduleLink} className="space-y-4 text-xs font-semibold">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Your Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Dele Falode"
+                  value={pickupName}
+                  onChange={e => setPickupName(e.target.value)}
+                  className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">WhatsApp / Contact Phone</label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="e.g. +2348012345678"
+                    value={pickupPhone}
+                    onChange={e => setPickupPhone(e.target.value)}
+                    className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Planned Date of dispatch</label>
+                  <input
+                    type="date"
+                    required
+                    value={pickupDate}
+                    onChange={e => setPickupDate(e.target.value)}
+                    className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Device purchased</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. HP Omnibook flagship laptop"
+                  value={pickupProduct}
+                  onChange={e => setPickupProduct(e.target.value)}
+                  className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Preferred Collection Method</label>
+                <select
+                  value={pickupMethod}
+                  onChange={e => setPickupMethod(e.target.value)}
+                  className="w-full bg-[#0A0F1E] border border-zinc-750 text-white rounded-lg p-2.5 text-xs"
+                >
+                  <option>Store Pickup (Deco Road, after Robinson Plaza, Warri)</option>
+                  <option>Local Courier Dispatch (Warri Central area)</option>
+                  <option>Inter-State delivery (external logistics standard)</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 px-4 bg-[#25D366] hover:bg-[#1eba4e] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <MessageCircle className="w-4.5 h-4.5" />
+                Schedule Pickup via WhatsApp support
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ROOM 9: WARRANTY */}
+        {currentTab === 'warranty' && (
+          <div id="room-[#warranty]" className="max-w-xl mx-auto bg-[#0F172A] border border-zinc-800 p-6 rounded-2xl space-y-6 shadow-xl animate-scaleIn">
+            <div className="space-y-1">
+              <span className="text-[10px] text-[#E8600A] font-syne uppercase tracking-widest font-extrabold font-bold">Room 9 WARRANTY CLAIMS</span>
+              <h3 className="text-xl font-syne font-black uppercase text-white">Official Warranty Registration</h3>
+              <p className="text-xs text-zinc-400">File serial numbers for laptop sets or solar modules to lock up official coverage terms.</p>
+            </div>
+
+            <form onSubmit={sendWarrantyWhatsApp} className="space-y-4 text-xs font-semibold">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Product Name & S/N or IMEI code</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. HP Omnibook Flip - S/N: HP8932483NX"
+                  value={warrantyProduct}
+                  onChange={e => setWarrantyProduct(e.target.value)}
+                  className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Date of purchase</label>
+                <input
+                  type="date"
+                  required
+                  value={warrantyDate}
+                  onChange={e => setWarrantyDate(e.target.value)}
+                  className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Claim Type or Registration purpose</label>
+                <select
+                  value={warrantySerial}
+                  onChange={e => setWarrantySerial(e.target.value)}
+                  className="w-full bg-[#0A0F1E] border border-zinc-750 text-white rounded-lg p-2.5 text-xs animate-scaleIn"
+                >
+                  <option value="New Device Warranty Registration">New Device Registration (Complimentary cover lock)</option>
+                  <option value="Defective Unit Return Claim request">Defective Unit Return Claim (Hardware troubleshooting)</option>
+                  <option value="Solar Battery Battery Array Inspection request">Solar Battery Cell balancing service claim</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Detail of claim or feedback comments (If claiming/problem diagnostic)</label>
+                <textarea
+                  placeholder="e.g. Charging balance diagnostic request or replacement track inquiry."
+                  value={warrantyReason}
+                  onChange={e => setWarrantyReason(e.target.value)}
+                  rows={3}
+                  className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 px-4 bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <MessageCircle className="w-4.5 h-4.5" />
+                Register warranty on WhatsApp Support
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ROOM 10: CONTACT */}
+        {currentTab === 'contact' && (
+          <div id="room-contact" className="space-y-6 animate-scaleIn">
+            <div className="text-center space-y-1">
+              <h3 className="text-xl font-syne font-black uppercase text-white">UGOMENZ MANAGER CONTACT SYSTEMS</h3>
+              <p className="text-xs text-zinc-400">Submit requests instantly depending on technical roles.</p>
+            </div>
+
+            {/* Availability Grid (Page 8) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Manager */}
+              <div className="bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex justify-between items-start">
+                    <span className="text-[10px] text-zinc-500 font-mono font-bold">ROLE: TIER 1</span>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${managers.manager === 'Available' ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${managers.manager === 'Available' ? 'bg-[#25D366]' : 'bg-red-500'}`}></span>
+                      {managers.manager}
+                    </span>
+                  </div>
+                  <h4 className="font-syne font-extrabold uppercase text-base text-white mt-2">Store Manager</h4>
+                  <p className="text-xs text-zinc-400 mt-1">Support for device details, store collection times, and customized orders.</p>
+                </div>
+                <a
+                  href={waLink('+2349060672127', 'Hello Manager, I am visiting from your official Digital Hublet and have some queries.')}
+                  target="_blank"
+                  className="w-full py-2.5 px-4 bg-[#25D366] hover:bg-[#1eba4e] text-white text-xs font-syne uppercase font-bold tracking-wider rounded-xl text-center flex items-center justify-center gap-2 transition-all"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Direct WhatsApp tap
+                </a>
+              </div>
+
+              {/* Financial Advisor */}
+              <div className="bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex justify-between items-start">
+                    <span className="text-[10px] text-zinc-500 font-mono font-bold">ROLE: TIER 2</span>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${managers.financialAdvisor === 'Available' ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${managers.financialAdvisor === 'Available' ? 'bg-[#25D366]' : 'bg-red-500'}`}></span>
+                      {managers.financialAdvisor}
+                    </span>
+                  </div>
+                  <h4 className="font-syne font-extrabold uppercase text-base text-white mt-2">Financial Advisor</h4>
+                  <p className="text-xs text-zinc-400 mt-1">Support for bank transaction coordinates, transfer receipt confirmation, and financing.</p>
+                </div>
+                <a
+                  href={waLink('+2347068767180', 'Hello Financial Advisor, I have a query regarding a bank payment receipt.')}
+                  target="_blank"
+                  className="w-full py-2.5 px-4 bg-[#25D366] hover:bg-[#1eba4e] text-white text-xs font-syne uppercase font-bold tracking-wider rounded-xl text-center flex items-center justify-center gap-2 transition-all"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Direct WhatsApp tap
+                </a>
+              </div>
+
+              {/* Lead Tech Expert */}
+              <div className="bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex justify-between items-start">
+                    <span className="text-[10px] text-zinc-500 font-mono font-bold">ROLE: TIER 3</span>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${managers.leadTechExpert === 'Available' ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${managers.leadTechExpert === 'Available' ? 'bg-[#25D366]' : 'bg-red-500'}`}></span>
+                      {managers.leadTechExpert}
+                    </span>
+                  </div>
+                  <h4 className="font-syne font-extrabold uppercase text-base text-white mt-2">Lead Tech Expert</h4>
+                  <p className="text-xs text-zinc-400 mt-1">Support for solar energy system analysis, warranties, and device installations.</p>
+                </div>
+                <a
+                  href={waLink('+2349060672127', 'Hello Lead Tech Expert, I would like to schedule a solar consultation or ask a technical question.')}
+                  target="_blank"
+                  className="w-full py-2.5 px-4 bg-[#25D366] hover:bg-[#1eba4e] text-white text-xs font-syne uppercase font-bold tracking-wider rounded-xl text-center flex items-center justify-center gap-2 transition-all"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Direct WhatsApp tap
+                </a>
+              </div>
+            </div>
+
+            {/* INTERACTIVE QR CODE GENERATOR (vCard) */}
+            <div className="max-w-xl mx-auto bg-[#0F172A] border border-zinc-800 p-6 rounded-2xl space-y-5 shadow-xl">
+              <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
+                <div className="p-2.5 bg-[#E8600A]/10 rounded-xl border border-[#E8600A]/20">
+                  <QrCode className="w-5 h-5 text-[#E8600A]" />
+                </div>
+                <div>
+                  <h4 className="font-syne font-black uppercase text-white text-sm tracking-wider">OFFICIAL CONTACT QR CODE GENERATOR</h4>
+                  <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-mono">Scan directly to save expert contacts into your phone</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                Choose one of our representative experts below to dynamically render their offline-ready **vCard (v3.0)** contact QR code. Scan it directly using your phone's camera to instantly save details!
+              </p>
+
+              {/* Selector buttons */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'manager', label: 'Store Manager', color: 'border-[#E8600A]/30' },
+                  { id: 'financialAdvisor', label: 'Finance Advisor', color: 'border-blue-500/30' },
+                  { id: 'leadTechExpert', label: 'Tech Expert', color: 'border-emerald-500/30' }
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setSelectedContactForQr(opt.id as any)}
+                    className={`p-2.5 rounded-xl border text-center transition-all text-[11px] font-syne font-bold uppercase cursor-pointer ${
+                      selectedContactForQr === opt.id
+                        ? 'bg-gradient-to-r from-[#E8600A] to-orange-600 border-transparent text-white shadow-lg shadow-[#E8600A]/20'
+                        : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Display card containing QR code and info */}
+              <div className="flex flex-col md:flex-row gap-5 items-center bg-[#070D19]/60 p-5 border border-zinc-850 rounded-2xl">
+                {/* QR Code Canvas/Image */}
+                <div className="relative group p-3 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center shrink-0">
+                  {qrDataUrl ? (
+                    <>
+                      <img
+                        src={qrDataUrl}
+                        alt="vCard QR Code"
+                        className="w-40 h-40 object-contain selection:bg-transparent"
+                      />
+                      <span className="text-[9px] text-zinc-500 font-mono mt-1 font-bold">SCAN CODES TO SAVE</span>
+                    </>
+                  ) : (
+                    <div className="w-40 h-40 flex items-center justify-center text-zinc-400 text-xs text-center font-semibold text-zinc-900">
+                      Generating...
+                    </div>
+                  )}
+                </div>
+
+                {/* Meta details showing encoded parameters */}
+                <div className="space-y-3 flex-grow w-full text-xs text-zinc-400">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-[#E8600A] uppercase font-bold tracking-wider">CURRENT ENCODED INFO</p>
+                    <p className="text-sm font-syne font-extrabold text-white uppercase select-all">
+                      {selectedContactForQr === 'manager' && 'Ugomenz Store Manager'}
+                      {selectedContactForQr === 'financialAdvisor' && 'Ugomenz Financial Advisor'}
+                      {selectedContactForQr === 'leadTechExpert' && 'Ugomenz Lead Tech Expert'}
+                    </p>
+                    <p className="text-xs font-mono text-zinc-350 select-all font-bold">
+                      {selectedContactForQr === 'manager' && '+234 906 067 2127'}
+                      {selectedContactForQr === 'financialAdvisor' && '+234 706 876 7180'}
+                      {selectedContactForQr === 'leadTechExpert' && '+234 906 067 2127'}
+                    </p>
+                  </div>
+
+                  <div className="text-[11px] leading-relaxed select-all bg-zinc-950/45 p-2 rounded-lg border border-zinc-850 font-mono text-zinc-400 whitespace-pre-line text-[10px]">
+                    {selectedContactForQr === 'manager' && (
+                      <>
+                        Organization: Ugomenz Electronics<br />
+                        Note: Official Store Manager for Ugomenz Electronics Warri.<br />
+                        Address: Deco Road, Warri, Delta State
+                      </>
+                    )}
+                    {selectedContactForQr === 'financialAdvisor' && (
+                      <>
+                        Organization: Ugomenz Electronics<br />
+                        Note: Financial advisor. Validates payment transfers.<br />
+                        Address: Deco Road, Warri, Delta State
+                      </>
+                    )}
+                    {selectedContactForQr === 'leadTechExpert' && (
+                      <>
+                        Organization: Ugomenz Electronics<br />
+                        Note: Solar energy systems, warranties & tech setups.<br />
+                        Address: Deco Road, Warri, Delta State
+                      </>
+                    )}
+                  </div>
+
+                  {/* Actions under QR */}
+                  <div className="flex gap-2">
+                    <a
+                      href={qrDataUrl}
+                      download={`Ugomenz_${selectedContactForQr}_vCard_QR.png`}
+                      className="flex-grow py-2 px-3 bg-zinc-900 border border-zinc-800 hover:border-[#E8600A]/30 text-zinc-100 rounded-lg text-center font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      Download Image
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const phone = selectedContactForQr === 'manager' || selectedContactForQr === 'leadTechExpert' ? '+2349060672127': '+2347068767180';
+                        navigator.clipboard.writeText(phone);
+                        alert('Phone number copied to clipboard!');
+                      }}
+                      className="py-2 px-3 bg-zinc-900 border border-zinc-800 hover:border-[#E8600A]/30 text-zinc-100 rounded-lg text-center font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      Copy Phone
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* GM Queue Submit form */}
+            <div id="gm-queue-form-anchor" className="max-w-xl mx-auto bg-[#0F172A] border border-zinc-800 p-6 rounded-2xl space-y-4 shadow-xl">
+              <h4 className="font-syne font-black uppercase text-[#E8600A] text-sm tracking-wider">UGOMENZ SUBMISSION QUEUE SYSTEM</h4>
+              <p className="text-xs text-zinc-400 leading-relaxed">Customers can submit digital tickets down into the queue. Our management staff and experts review this dashboard regularly within the Staff Corner.</p>
+
+              <form onSubmit={handleSubmitGmQuery} className="space-y-4 text-xs font-semibold">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Your Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Fortune Akioya"
+                    value={gmQueryName}
+                    onChange={e => setGmQueryName(e.target.value)}
+                    className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">WhatsApp phone number</label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="e.g. +2348065210611"
+                    value={gmQueryPhone}
+                    onChange={e => setGmQueryPhone(e.target.value)}
+                    className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Subject of escalation</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Enterprise solar bundle consultation"
+                    value={gmQuerySubject}
+                    onChange={e => setGmQuerySubject(e.target.value)}
+                    className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Describe report details</label>
+                  <textarea
+                    required
+                    placeholder="Detailed query description..."
+                    value={gmQueryMsg}
+                    onChange={e => setGmQueryMsg(e.target.value)}
+                    rows={4}
+                    className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white focus:outline-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 px-4 bg-[#003087] hover:bg-[#002060] border border-[#ff7518]/20 text-white text-xs font-syne uppercase font-bold tracking-widest rounded-xl transition-all"
+                >
+                  Submit escalated query to GM Queue
+                </button>
+              </form>
+
+              {submittedGmStatus && (
+                <div className="bg-emerald-950/40 p-4 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
+                  <CheckCircle className="w-4.5 h-4.5" />
+                  Your report has been securely queued for General Manager review. Track updates in your notifications.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ROOM 11: FEEDBACK */}
+        {currentTab === 'feedback' && (
+          <div id="room-feedback" className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-scaleIn">
+            {/* Reviews list */}
+            <div className="md:col-span-7 bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl space-y-6 shadow-xl">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm font-syne font-extrabold uppercase">Product Ratings & reviews</h3>
+                  <p className="text-xs text-zinc-400">Total customer feedback verified on the local device storage.</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl font-syne font-black text-[#E8600A]">{avgReviewRating}</span>
+                  <span className="text-zinc-500 text-xs pl-1">/ 5</span>
+                  <p className="text-[9px] text-zinc-400 font-bold uppercase">{feedback.length} feedbacks</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {feedback.map((fb) => (
+                  <div key={fb.id} className="bg-[#050B18] border border-zinc-800 p-4 rounded-xl space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-white font-bold">{fb.customerName}</span>
+                      <div className="flex gap-1 text-sm text-amber-500">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star key={i} className={`w-3.5 h-3.5 ${i < fb.rating ? 'fill-current' : 'text-zinc-700'}`} />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-zinc-300 leading-relaxed italic">&ldquo;{fb.comment}&rdquo;</p>
+                    <p className="text-[9px] text-zinc-500 text-right">{fb.dateStr}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Leave a review */}
+            <div className="md:col-span-5 bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl h-fit space-y-4 shadow-xl">
+              <h4 className="text-sm font-syne font-extrabold uppercase text-white">SUBMIT VERIFIED REVIEW</h4>
+
+              <form onSubmit={handleSubmitFeedback} className="space-y-3 font-semibold text-xs text-zinc-400">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Your Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Amara Warri"
+                    value={fbName}
+                    onChange={e => setFbName(e.target.value)}
+                    className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Star Assessment ({fbStars} / 5)</label>
+                  <div className="flex gap-2 py-1">
+                    {[1, 2, 3, 4, 5].map(st => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setFbStars(st)}
+                        className={`text-xl transition-colors ${st <= fbStars ? 'text-amber-500' : 'text-zinc-700'}`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Commentary / Review</label>
+                  <textarea
+                    required
+                    placeholder="Describe your satisfaction with HP laptop, solar installation or GTBank quick transactions here..."
+                    value={fbComment}
+                    onChange={e => setFbComment(e.target.value)}
+                    rows={4}
+                    className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white focus:outline-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 px-4 bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl transition-all"
+                >
+                  Post product review
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ROOM 12: EDUCATION */}
+        {currentTab === 'shadow' && (
+          <div id="room-shadow" className="space-y-6 animate-scaleIn max-w-4xl mx-auto">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#003087] to-zinc-950 border border-zinc-800 p-8 text-center space-y-4 shadow-xl">
+              <span className="text-[10px] text-[#E8600A] font-syne uppercase tracking-widest font-extrabold">Room 12 ESGMC SHADOW SCHOOL</span>
+              <h3 className="text-3xl font-syne font-black uppercase text-white leading-tight">SDGSpreneurship & Sustainables Training</h3>
+              <p className="text-sm text-zinc-300 max-w-2xl mx-auto leading-relaxed">
+                Empowering the next-generation of business leaders in Warri, Delta State through micro-retail practices, environmental solar hub installation learning and zero-waste logistics.
+              </p>
+              <div className="flex justify-center gap-3">
+                <a
+                  href={waLink('+2349060672127', 'Hello ESGMC Shadow school, I want to learn more about the SDGSpreneurship enrolment.')}
+                  target="_blank"
+                  className="bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-syne font-bold uppercase px-5 py-3 rounded-xl shadow-lg transition-all"
+                >
+                  Enroll / WhatsApp Inquiry
+                </a>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl space-y-3 shadow-lg">
+                <h4 className="font-syne font-extrabold text-sm uppercase text-white border-b border-zinc-800 pb-2">Our Methodology</h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  ESGMC Shadow School runs an executive learning incubator allowing local interns to manage Ugomenz retail inventory, test high productivity laptops and deploy solar hubs dynamically.
+                </p>
+              </div>
+
+              <div className="bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl space-y-3 shadow-lg">
+                <h4 className="font-syne font-extrabold text-sm uppercase text-white border-b border-zinc-800 pb-2">SDGs Learning Lab</h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  We cover essential elements of climate response (Goal 13), sustainable infrastructure (Goal 9) and decent employment growth (Goal 8) to secure circular economies in Warri.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ROOM 13: STAFF CORNER */}
+        {currentTab === 'staff' && (
+          <div id="room-staff" className="space-y-6 animate-scaleIn">
+            {!isStaffAuthenticated ? (
+              /* Administrative Lock Screen Panel - Page 8 */
+              <div className="max-w-md mx-auto bg-[#0F172A] border border-zinc-850 p-6 rounded-2xl space-y-6 shadow-2xl relative">
+                <div className="absolute top-0 right-0 h-1.5 w-1/3 bg-[#E8600A] rounded-tr-2xl"></div>
+                <div className="text-center space-y-1.5">
+                  <div className="w-11 h-11 rounded-full bg-zinc-900 mx-auto flex items-center justify-center text-[#E8600A] border border-zinc-805">
+                    <Lock className="w-4.5 h-4.5" />
+                  </div>
+                  <h3 className="text-base font-syne font-extrabold uppercase text-white">Ugomenz Staff Authorization</h3>
+                  <p className="text-xs text-zinc-400">Unlock overrides for prices, stock statuses, live bank cords & diagnostics</p>
+                </div>
+
+                <form onSubmit={handleStaffLogin} className="space-y-4 text-xs font-semibold">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Company Manager Code</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. UGOMENZ2025"
+                      value={staffCode}
+                      onChange={e => setStaffCode(e.target.value)}
+                      className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Manager Key</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="qw123#@"
+                        value={staffKey}
+                        onChange={e => setStaffKey(e.target.value)}
+                        className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Authorization PIN</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="12345"
+                        value={staffPin}
+                        onChange={e => setStaffPin(e.target.value)}
+                        className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {staffError && <p className="text-red-400 text-[11px] font-bold text-center">{staffError}</p>}
+
+                  <button
+                    type="submit"
+                    className="w-full py-3.5 px-4 bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl shadow-lg transition-all cursor-pointer"
+                  >
+                    Authenticate credentials
+                  </button>
+                </form>
+
+                <p className="text-zinc-500 text-[10px] text-center italic border-t border-zinc-800/80 pt-3">
+                  Default: Code: <span className="font-mono text-zinc-400">UGOMENZ2025</span> / Key: <span className="font-mono text-zinc-400">qw123#@</span> / PIN: <span className="font-mono text-zinc-400">12345</span>
+                </p>
+              </div>
+            ) : (
+              /* Authenticated Staff Standalone Workshop Suite */
+              <StaffWorkshopSuite
+                campaign={campaign}
+                setCampaign={setCampaign}
+                products={products}
+                setProducts={setProducts}
+                videoList={videoList}
+                setVideoList={setVideoList}
+                socialsState={socialsState}
+                setSocialsState={setSocialsState}
+                managers={managers}
+                handleToggleManagerStatus={handleToggleManagerStatus}
+                feedback={feedback}
+                setFeedback={setFeedback}
+                handleStaffLogout={handleStaffLogout}
+                categories={categories}
+                analytics={analytics}
+                setAnalytics={setAnalytics}
+              />
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* FIXED SCROLLABLE BOTTOM TABS NAV (13 TABS) - Page 3 */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-[#050B18] border-t border-zinc-800/80 p-1.5 sm:p-2 z-40 shadow-2xl">
+        <div className="max-w-7xl mx-auto relative">
+          {/* Scroll fade modifiers */}
+          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#050B18] to-transparent pointer-events-none z-10"></div>
+
+          <div className="flex gap-1 overflow-x-auto no-scrollbar scroll-smooth pl-2 pr-8 py-0.5 justify-start md:justify-between">
+            {[
+              { id: 'gallery', label: 'Gallery', icon: ImageIcon },
+              { id: 'videos', label: 'Videos', icon: PlayCircle },
+              { id: 'showroom', label: 'Showroom', icon: Store },
+              { id: 'infoDesk', label: 'AI Desk', icon: Bot },
+              { id: 'channel', label: 'Channel', icon: Share2 },
+              { id: 'livesheet', label: 'Live Sheet', icon: FileText },
+              { id: 'invoice', label: 'Invoice', icon: CreditCard },
+              { id: 'pickup', label: 'Pickup', icon: Truck },
+              { id: 'warranty', label: 'Warranty', icon: ShieldAlert },
+              { id: 'contact', label: 'Contact', icon: Phone },
+              { id: 'feedback', label: 'Feedback', icon: Star },
+              { id: 'shadow', label: 'Education', icon: GraduationCap },
+              { id: 'staff', label: 'Staff_Set', icon: Settings },
+            ].map((tab, idx) => {
+              const IconComp = tab.icon;
+              const isActive = currentTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setCurrentTab(tab.id);
+                    recordRoomVisit(tab.id);
+                  }}
+                  className={`flex flex-col items-center justify-center p-2 rounded-lg relative shrink-0 transition-all ${isActive ? 'text-[#E8600A]' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  style={{ minWidth: '68px' }}
+                >
+                  {/* Page 3 Top orange border active tab selector */}
+                  {isActive && (
+                    <span className="absolute top-0 left-1/3 right-1/3 h-[3px] bg-[#E8600A] rounded-full"></span>
+                  )}
+                  <IconComp className="w-5 h-5 mb-1" />
+                  <span className="text-[9px] font-syne font-bold uppercase tracking-wider truncate max-w-full">
+                    {tab.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
+
+      {/* Bottom Sheet Modal S1 Quick-View (Suggestions) */}
+      {quickViewProduct && (() => {
+        // Find current selected variant if specified
+        const currentVariant = quickViewProduct.variants?.find(v => v.id === selectedVariantId) || null;
+
+        // Collect all valid available images for the active specs
+        const angleImages = currentVariant
+          ? [currentVariant.heroImage, currentVariant.angle2, currentVariant.angle3, currentVariant.angle4, currentVariant.angle5].filter(Boolean) as string[]
+          : [quickViewProduct.heroImage, quickViewProduct.angle2, quickViewProduct.angle3, quickViewProduct.angle4, quickViewProduct.angle5].filter(Boolean) as string[];
+
+        const activeFeaturedImage = selectedAnglePhotoUrl && angleImages.includes(selectedAnglePhotoUrl)
+          ? selectedAnglePhotoUrl
+          : (angleImages[0] || quickViewProduct.heroImage);
+
+        return (
+          <div className="fixed inset-0 bg-black/80 flex items-end justify-center z-50 p-0 sm:p-4 transition-all">
+            <div className="bg-[#0A0F1E] border-t sm:border border-zinc-800 w-full max-w-2xl rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto no-scrollbar p-6 space-y-6 relative flex flex-col justify-between">
+              <button
+                type="button"
+                onClick={() => setQuickViewProduct(null)}
+                className="absolute top-5 right-5 p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition-all z-20"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="bg-[#003087] text-white text-[10px] uppercase font-syne font-extrabold px-2.5 py-1 rounded">
+                    Interactive Spec Sheet
+                  </span>
+                  <span className="text-zinc-500 font-mono text-xs font-bold uppercase">{currentVariant?.sku || quickViewProduct.model || 'DECO-WARRI'}</span>
+                  {currentVariant && (
+                    <span className="bg-emerald-950 border border-emerald-500/30 text-emerald-400 text-[10px] uppercase font-sans font-extrabold px-2 py-0.5 rounded">
+                      Variant: {currentVariant.colorName}
+                    </span>
+                  )}
+                </div>
+
+                {/* Angle Gallery in quick view */}
+                <div className="space-y-3">
+                  <div className="aspect-[16/10] w-full rounded-2xl bg-[#050B18] overflow-hidden border border-zinc-800 flex items-center justify-center relative p-3">
+                    <img src={activeFeaturedImage} alt={quickViewProduct.name} className="max-h-full max-w-full object-contain hover:scale-105 transition-all duration-300" />
+                    <div className="absolute top-4 left-4 bg-[#E8600A] text-white text-xs font-syne font-extrabold px-3 py-1.5 rounded-lg shadow-md uppercase">
+                      {quickViewProduct.price === 0 ? 'Call for Price' : `₦${quickViewProduct.price.toLocaleString()}`}
+                    </div>
+                  </div>
+
+                  {/* Multi angle thumbnail selectors */}
+                  {angleImages.length > 1 && (
+                    <div className="flex justify-center gap-2 pb-1 overflow-x-auto">
+                      {angleImages.map((img, index) => {
+                        const isSelected = activeFeaturedImage === img;
+                        const label = index === 0 ? "Front" : index === 1 ? "Side" : index === 2 ? "Back" : index === 3 ? "Port" : "Detail";
+                        return (
+                          <button
+                            key={`thumb-${index}`}
+                            type="button"
+                            onClick={() => setSelectedAnglePhotoUrl(img)}
+                            className={`flex flex-col items-center gap-1 p-1 rounded-xl bg-[#0F172A] border transition-all ${isSelected ? 'border-[#E8600A] scale-102 bg-zinc-900' : 'border-zinc-800 hover:border-zinc-700'}`}
+                          >
+                            <img src={img} className="w-12 h-10 object-cover rounded-lg" alt="" />
+                            <span className="text-[8px] font-mono text-zinc-500 font-bold uppercase">{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Product Meta details */}
+                <div className="space-y-1">
+                  <h4 className="text-lg font-syne font-extrabold uppercase text-white">{quickViewProduct.name}</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed bg-[#050B18]/45 p-3 rounded-xl border border-zinc-855">{quickViewProduct.description}</p>
+                </div>
+
+                {/* Variant Color selection */}
+                {quickViewProduct.variants && quickViewProduct.variants.length > 0 && (
+                  <div className="space-y-2 border-t border-zinc-800/80 pt-3">
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Available Options & Multiangle Shades:</label>
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedVariantId(null);
+                          setSelectedAnglePhotoUrl(null);
+                        }}
+                        className={`px-3 py-2 text-xs font-syne font-bold uppercase rounded-xl border transition-all ${
+                          selectedVariantId === null
+                            ? 'bg-[#E8600A]/10 border-[#E8600A] text-white'
+                            : 'border-zinc-805 text-zinc-400 bg-[#0F172A] hover:border-zinc-700'
+                        }`}
+                      >
+                        Default Shade
+                      </button>
+                      {quickViewProduct.variants.map((v) => {
+                        const isSelected = selectedVariantId === v.id;
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedVariantId(v.id);
+                              setSelectedAnglePhotoUrl(v.heroImage); // Default to the variant's hero image
+                            }}
+                            className={`px-3 py-2 text-xs font-syne font-bold uppercase rounded-xl border transition-all ${
+                              isSelected
+                                ? 'bg-[#E8600A]/10 border-[#E8600A] text-white'
+                                : 'border-zinc-805 text-zinc-400 bg-[#0F172A] hover:border-zinc-700'
+                            }`}
+                          >
+                            🎨 {v.colorName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center bg-[#0F172A] p-3 rounded-xl text-xs border border-zinc-850">
+                  <span className="text-zinc-400">Availability Rating:</span>
+                  <span className={`font-bold ${quickViewProduct.stockStatus === 'In Stock' ? 'text-green-400' : 'text-zinc-500'}`}>
+                    {quickViewProduct.stockStatus}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-zinc-800 mt-6 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveCategoryFilter(quickViewProduct.category);
+                    setSearchQuery(quickViewProduct.name);
+                    setCurrentTab('gallery');
+                    setQuickViewProduct(null);
+                  }}
+                  className="py-3 px-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-xs font-syne font-bold uppercase rounded-xl tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Search className="w-4 h-4" />
+                  Show Showroom Filter
+                </button>
+
+                <a
+                  href={waLink('+2349060672127', `Hello, I want to pay for ${quickViewProduct.name} - ${currentVariant ? currentVariant.colorName : 'Default'} (₦${quickViewProduct.price.toLocaleString()}) via quick scan.`)}
+                  target="_blank"
+                  className="py-3 px-4 bg-[#25D366] hover:bg-[#1eba4e] text-white text-xs font-syne font-bold uppercase rounded-xl tracking-wider text-center flex items-center justify-center gap-1.5 flex-1 transition-all"
+                  onClick={() => setQuickViewProduct(null)}
+                >
+                  <MessageCircle className="w-4.5 h-4.5" />
+                  WhatsApp Buy
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickViewProduct(null);
+                    setCurrentTab('invoice');
+                  }}
+                  className="py-3 px-4 bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-syne font-bold uppercase rounded-xl tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <CreditCard className="w-4.5 h-4.5" />
+                  Direct invoice pay &rarr;
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// Compact SVG cancel icon helper
+function X({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}

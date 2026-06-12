@@ -1,0 +1,6 @@
+{
+  "name": "Ugomenz Electronics Hublet",
+  "description": "The official digital management, sales, and marketing hublet for Ugomenz Electronics / Ugomenz Mall.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

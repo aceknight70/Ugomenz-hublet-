@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #003087;
+  --color-accent: #E8600A;
+  --color-bg: #0A0F1E;
+  --color-text: #FFFFFF;
+  --color-success: #25D366;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: #0A0F1E;
+  color: #FFFFFF;
+}
+
+h1, h2, h3, h4, h5, h6, .font-syne {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+}
+
+/* Custom animations from original specifications (Page 2) */
+@keyframes uDraw {
+  0% {
+    stroke-dashoffset: 600;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes uGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px rgba(232, 96, 10, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 20px rgba(232, 96, 10, 0.9));
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes enterPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(232, 96, 10, 0.5);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px 4px rgba(232, 96, 10, 0.3);
+  }
+}
+
+/* Animation utilities */
+.animate-uDraw {
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: uDraw 2.5s forwards ease-in-out;
+}
+
+.animate-uGlow {
+  animation: uGlow 3s infinite ease-in-out;
+}
+
+.animate-fadeUp {
+  animation: fadeUp 1.2s forwards cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-scaleIn {
+  animation: scaleIn 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.pulse-button {
+  animation: enterPulse 2.5s infinite ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes slideProgress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.animate-slideProgress {
+  animation: slideProgress 3s linear forwards;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
