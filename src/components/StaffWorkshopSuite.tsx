@@ -137,6 +137,7 @@ const ImageUploadInput: React.FC<ImageUploadInputProps> = ({
 };
 
 interface StaffWorkshopSuiteProps {
+  currentUser?: any;
   campaign: CampaignConfig;
   setCampaign: React.Dispatch<React.SetStateAction<CampaignConfig>>;
   products: Product[];
@@ -156,6 +157,7 @@ interface StaffWorkshopSuiteProps {
 }
 
 export default function StaffWorkshopSuite({
+  currentUser,
   campaign,
   setCampaign,
   products,
@@ -347,7 +349,19 @@ export default function StaffWorkshopSuite({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2 shrink-0 items-center">
+          {currentUser && (
+            <div className="flex items-center gap-2 bg-zinc-950/80 p-1 pl-2.5 pr-1 border border-zinc-850 rounded-lg text-xs">
+              <span className="text-[10px] text-zinc-400 font-mono hidden sm:inline">{currentUser.email}</span>
+              {currentUser.photoURL ? (
+                <img src={currentUser.photoURL} alt="Avatar" className="w-5 h-5 rounded-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-[#E8600A]">
+                  G
+                </div>
+              )}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => {

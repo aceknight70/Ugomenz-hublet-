@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Products rules
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isEmailVerified();
+    }
+
+    // Feedback rules
+    match /feedback/{feedbackId} {
+      allow read: if true;
+      allow create: if true; // Customers can post feedback / support tickets
+      allow update, delete: if isEmailVerified();
+    }
+
+    // GM Queries rules
+    match /gm_queries/{queryId} {
+      allow read: if true;
+      allow create: if true; // Customers can submit general manager enquiries
+      allow update, delete: if isEmailVerified();
+    }
+
+    // Settings rules
+    match /settings/{settingId} {
+      allow read: if true;
+      allow create, update, delete: if isEmailVerified();
+    }
+  }
+}

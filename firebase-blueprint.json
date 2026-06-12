@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Inventory items in the electronic showcase",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "model": { "type": "string" },
+        "price": { "type": "number" },
+        "promoPrice": { "type": "number" },
+        "category": { "type": "string" },
+        "stockStatus": { "type": "string", "enum": ["In Stock", "Out of Stock"] },
+        "description": { "type": "string" },
+        "heroImage": { "type": "string" },
+        "angle2": { "type": "string" },
+        "angle3": { "type": "string" },
+        "angle4": { "type": "string" },
+        "angle5": { "type": "string" },
+        "variants": { "type": "array" }
+      },
+      "required": ["id", "name", "price", "category", "stockStatus", "heroImage"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "Support tickets and review log instances",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "customerName": { "type": "string" },
+        "dateStr": { "type": "string" }
+      },
+      "required": ["id", "rating", "comment", "customerName", "dateStr"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Dynamic workspace campaigns and global store controls",
+      "type": "object",
+      "properties": {
+        "campaignActive": { "type": "boolean" },
+        "campaignTag": { "type": "string" },
+        "headline": { "type": "string" },
+        "subHeadline": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "accentHoverColor": { "type": "string" },
+        "storeName": { "type": "string" },
+        "storeSubName": { "type": "string" },
+        "tickerText": { "type": "string" },
+        "tickerActive": { "type": "boolean" },
+        "themePreset": { "type": "string" },
+        "snowAnimationActive": { "type": "boolean" }
+      }
+    }
+  },
+  "firestore": {
+    "products/{productId}": {
+      "schema": "Product",
+      "description": "Products list editable by logged in staff"
+    },
+    "feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Support incident logged by clients"
+    },
+    "settings/{settingId}": {
+      "schema": "Setting",
+      "description": "Store styles and campaign controls"
+    }
+  }
+}

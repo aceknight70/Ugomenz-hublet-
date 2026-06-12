@@ -14,6 +14,9 @@ import {
 import { Product, Variant, BankDetails, Review, GMQuery, ManagerStatus, AnalyticsData, CampaignConfig } from './types';
 import { INITIAL_PRODUCTS, INITIAL_SHOWROOM_PHOTOS } from './initialData';
 import StaffWorkshopSuite from './components/StaffWorkshopSuite';
+import { auth, db, googleProvider, OperationType, handleFirestoreError } from './firebase';
+import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
 // Constants
 const MGR_CODE = 'UGOMENZ2025';
@@ -40,6 +43,7 @@ export default function App() {
   // ----------------------------------------------------
   // APP STATE & STORAGE INITIALIZATION
   // ----------------------------------------------------
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [hasEntered, setHasEntered] = useState<boolean>(() => {
     return localStorage.getItem('ug_entered') === 'true';
   });
@@ -180,6 +184,173 @@ END:VCARD`;
       console.error('Failed to generate vCard QR Code:', err);
     });
   }, [selectedContactForQr]);
+
+  // ----------------------------------------------------
+  // REAL-TIME FIREBASE SYNC HOOKS
+  // ----------------------------------------------------
+  useEffect(() => {
+    // 0. Auth state changed
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (user && user.emailVerified) {
+        setIsStaffAuthenticated(true);
+        localStorage.setItem('ug_staff_auth', 'true');
+      }
+    });
+
+    // 1. Subscribe to Products
+    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+      if (snapshot.empty) {
+        // First run, let's load initial products into Firestore
+        INITIAL_PRODUCTS.forEach(async (p) => {
+          try {
+            await setDoc(doc(db, 'products', p.id), p);
+          } catch (e) {
+            console.error("Failed to seed product", p.id, e);
+          }
+        });
+      } else {
+        const list: Product[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as Product);
+        });
+        setProducts(list);
+        localStorage.setItem('ug_products_list', JSON.stringify(list));
+      }
+    }, (error) => {
+      console.warn("Products sync read-only or restricted: ", error.message);
+    });
+
+    // 2. Subscribe to Feedback / Reviews
+    const unsubFeedback = onSnapshot(collection(db, 'feedback'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaultReviews: Review[] = [
+          { id: '1', rating: 5, comment: 'Exceptional solar bundle customer service! Jinko bifacial panels increased my daily output by 20%!', customerName: 'Dele Falode', dateStr: '2026-06-02' },
+          { id: '2', rating: 5, comment: 'Got my HP Omnibook flagship here. Outstanding customer care on WhatsApp.', customerName: 'Chima Obi', dateStr: '2026-06-08' },
+          { id: '3', rating: 4, comment: 'Reliable and authentic products. Fast pickup scheduling at Deco Road.', customerName: 'Amara Warri', dateStr: '2026-06-09' }
+        ];
+        defaultReviews.forEach(async (r) => {
+          try {
+            await setDoc(doc(db, 'feedback', r.id), r);
+          } catch (e) {}
+        });
+      } else {
+        const list: Review[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as Review);
+        });
+        // Sort newest first
+        list.sort((a,b) => b.id.localeCompare(a.id));
+        setFeedback(list);
+        localStorage.setItem('ug_feedback', JSON.stringify(list));
+      }
+    }, (error) => {
+      console.warn("Feedback sync read-only or restricted: ", error.message);
+    });
+
+    // 3. Subscribe to GM Queries
+    const unsubGmQueue = onSnapshot(collection(db, 'gm_queries'), (snapshot) => {
+      const list: GMQuery[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as GMQuery);
+      });
+      list.sort((a,b) => b.id.localeCompare(a.id));
+      setGmQueue(list);
+      localStorage.setItem('ug_gm_queue', JSON.stringify(list));
+    }, (error) => {
+      console.warn("GM Queries sync: ", error.message);
+    });
+
+    // 4. Subscribe to Store Campaign Settings
+    const unsubCampaign = onSnapshot(doc(db, 'settings', 'campaign'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as CampaignConfig;
+        setCampaign(data);
+        localStorage.setItem('ug_campaign', JSON.stringify(data));
+      } else {
+        // Seed campaign settings
+        setDoc(doc(db, 'settings', 'campaign'), DEFAULT_CAMPAIGN)
+          .catch(e => console.error("Error seeding campaign settings: ", e));
+      }
+    }, (error) => {
+      console.warn("Campaign sync: ", error.message);
+    });
+
+    // 5. Subscribe to Bank Settings
+    const unsubBank = onSnapshot(doc(db, 'settings', 'bank'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as BankDetails;
+        setBank(data);
+        localStorage.setItem('ug_bank', JSON.stringify(data));
+      } else {
+        const defaultBank = {
+          bank: 'GTBank (GTB)',
+          accountNumber: '9006163631',
+          accountName: 'Ugomenz Electronics'
+        };
+        setDoc(doc(db, 'settings', 'bank'), defaultBank)
+          .catch(e => console.error("Error seeding bank settings: ", e));
+      }
+    }, (error) => {
+      console.warn("Bank sync: ", error.message);
+    });
+
+    // 6. Subscribe to Managers Status settings
+    const unsubManagers = onSnapshot(doc(db, 'settings', 'managers'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as ManagerStatus;
+        setManagers(data);
+        localStorage.setItem('ug_mgr_status', JSON.stringify(data));
+      } else {
+        const defaultMgr: ManagerStatus = { manager: 'Available', financialAdvisor: 'Available', leadTechExpert: 'Available' };
+        setDoc(doc(db, 'settings', 'managers'), defaultMgr)
+          .catch(e => console.error("Error seeding manager settings: ", e));
+      }
+    }, (error) => {
+      console.warn("Managers sync: ", error.message);
+    });
+
+    // 7. Subscribe to Video List
+    const unsubVideos = onSnapshot(doc(db, 'settings', 'videoList'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data && Array.isArray(data.videos)) {
+          setVideoList(data.videos);
+          localStorage.setItem('ug_uploaded_videos', JSON.stringify(data.videos));
+        }
+      } else {
+        const defaultVideos = ['https://www.youtube.com/embed/dQw4w9WgXcQ'];
+        setDoc(doc(db, 'settings', 'videoList'), { videos: defaultVideos })
+          .catch(e => console.error("Error seeding default videos: ", e));
+      }
+    }, (error) => {
+      console.warn("Videos sync: ", error.message);
+    });
+
+    // Validate connection to Firestore (CRITICAL limit validation rule in SDK skill)
+    const testConnection = async () => {
+      try {
+        const { doc, getDocFromServer } = await import('firebase/firestore');
+        await getDocFromServer(doc(db, 'settings', 'campaign'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration.");
+        }
+      }
+    };
+    testConnection();
+
+    return () => {
+      unsubscribeAuth();
+      unsubProducts();
+      unsubFeedback();
+      unsubGmQueue();
+      unsubCampaign();
+      unsubBank();
+      unsubManagers();
+      unsubVideos();
+    };
+  }, []);
 
   // Analytics tracking structure
   const [analytics, setAnalytics] = useState<AnalyticsData>(() => {
@@ -575,7 +746,7 @@ END:VCARD`;
   const [gmQueryMsg, setGmQueryMsg] = useState('');
   const [submittedGmStatus, setSubmittedGmStatus] = useState(false);
 
-  const handleSubmitGmQuery = (e: React.FormEvent) => {
+  const handleSubmitGmQuery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!gmQueryName || !gmQueryPhone || !gmQueryMsg) return;
 
@@ -593,6 +764,13 @@ END:VCARD`;
     setGmQueue(updated);
     localStorage.setItem('ug_gm_queue', JSON.stringify(updated));
 
+    // Cloud Firestore Sync
+    try {
+      await setDoc(doc(db, 'gm_queries', newQuery.id), newQuery);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `gm_queries/${newQuery.id}`);
+    }
+
     setGmQueryName('');
     setGmQueryPhone('');
     setGmQuerySubject('');
@@ -608,7 +786,7 @@ END:VCARD`;
   const [fbStars, setFbStars] = useState(5);
   const [fbComment, setFbComment] = useState('');
 
-  const handleSubmitFeedback = (e: React.FormEvent) => {
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fbName.trim() || !fbComment.trim()) return;
 
@@ -623,6 +801,13 @@ END:VCARD`;
     const updated = [newFb, ...feedback];
     setFeedback(updated);
     localStorage.setItem('ug_feedback', JSON.stringify(updated));
+
+    // Cloud Firestore Sync
+    try {
+      await setDoc(doc(db, 'feedback', newFb.id), newFb);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `feedback/${newFb.id}`);
+    }
 
     setFbName('');
     setFbComment('');
@@ -644,6 +829,14 @@ END:VCARD`;
   const [isStaffAuthenticated, setIsStaffAuthenticated] = useState<boolean>(() => {
     return localStorage.getItem('ug_staff_auth') === 'true';
   });
+
+  // Real-time Video List cloud synchronizer
+  useEffect(() => {
+    if (isStaffAuthenticated && currentUser && videoList.length > 0) {
+      setDoc(doc(db, 'settings', 'videoList'), { videos: videoList })
+        .catch(err => console.warn("Error syncing video list to Firestore", err));
+    }
+  }, [videoList, isStaffAuthenticated, currentUser]);
   const [staffTab, setStaffTab] = useState<'campaign' | 'catalog' | 'analytics' | 'experts' | 'tickets'>('campaign');
   const [campaignWorkbenchTab, setCampaignWorkbenchTab] = useState<'presets' | 'tickers' | 'products' | 'videos' | 'socials'>('presets');
   const [spreadsheetSearch, setSpreadsheetSearch] = useState('');
@@ -694,51 +887,109 @@ END:VCARD`;
     }
   };
 
-  const handleStaffLogout = () => {
+  const handleGoogleSignIn = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        setIsStaffAuthenticated(true);
+        localStorage.setItem('ug_staff_auth', 'true');
+        setStaffError('');
+      }
+    } catch (error: any) {
+      console.error("Google Login Error: ", error);
+      setStaffError("Google authentication failed: " + error.message);
+    }
+  };
+
+  const handleStaffLogout = async () => {
     setIsStaffAuthenticated(false);
     localStorage.removeItem('ug_staff_auth');
     setStaffCode('');
     setStaffKey('');
     setStaffPin('');
+    try {
+      await signOut(auth);
+    } catch (e) {}
   };
 
   // Admin overrides helpers
-  const handleUpdatePrice = (prodId: string, newPrice: number) => {
+  const handleUpdatePrice = async (prodId: string, newPrice: number) => {
     const updated = products.map(p => {
       if (p.id === prodId) return { ...p, price: newPrice };
       return p;
     });
     setProducts(updated);
     localStorage.setItem('ug_products_list', JSON.stringify(updated));
+
+    // Cloud Firestore Sync
+    const targetProduct = updated.find(p => p.id === prodId);
+    if (targetProduct) {
+      try {
+        await setDoc(doc(db, 'products', prodId), targetProduct);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `products/${prodId}`);
+      }
+    }
   };
 
-  const handleUpdateStock = (prodId: string, isStock: 'In Stock' | 'Out of Stock') => {
+  const handleUpdateStock = async (prodId: string, isStock: 'In Stock' | 'Out of Stock') => {
     const updated = products.map(p => {
       if (p.id === prodId) return { ...p, stockStatus: isStock };
       return p;
     });
     setProducts(updated);
     localStorage.setItem('ug_products_list', JSON.stringify(updated));
+
+    // Cloud Firestore Sync
+    const targetProduct = updated.find(p => p.id === prodId);
+    if (targetProduct) {
+      try {
+        await setDoc(doc(db, 'products', prodId), targetProduct);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `products/${prodId}`);
+      }
+    }
   };
 
-  const handleUpdateBank = (updatedDetails: BankDetails) => {
+  const handleUpdateBank = async (updatedDetails: BankDetails) => {
     setBank(updatedDetails);
     localStorage.setItem('ug_bank', JSON.stringify(updatedDetails));
+
+    // Cloud Firestore Sync
+    try {
+      await setDoc(doc(db, 'settings', 'bank'), updatedDetails);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/bank');
+    }
   };
 
-  const handleToggleManagerStatus = (role: 'manager' | 'financialAdvisor' | 'leadTechExpert') => {
+  const handleToggleManagerStatus = async (role: 'manager' | 'financialAdvisor' | 'leadTechExpert') => {
     const updated = {
       ...managers,
       [role]: managers[role] === 'Available' ? 'Busy' : 'Available'
     };
     setManagers(updated);
     localStorage.setItem('ug_mgr_status', JSON.stringify(updated));
+
+    // Cloud Firestore Sync
+    try {
+      await setDoc(doc(db, 'settings', 'managers'), updated);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/managers');
+    }
   };
 
-  const handleDeleteGmQuery = (id: string) => {
+  const handleDeleteGmQuery = async (id: string) => {
     const updated = gmQueue.filter(q => q.id !== id);
     setGmQueue(updated);
     localStorage.setItem('ug_gm_queue', JSON.stringify(updated));
+
+    // Cloud Firestore Sync
+    try {
+      await deleteDoc(doc(db, 'gm_queries', id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `gm_queries/${id}`);
+    }
   };
 
   // Real-time photo upload base64 encoding (Page 8)
@@ -2412,6 +2663,26 @@ END:VCARD`;
                   </button>
                 </form>
 
+                <div className="flex items-center gap-2">
+                  <div className="h-px bg-zinc-850 flex-1"></div>
+                  <span className="text-[9px] text-zinc-500 uppercase font-black">OR</span>
+                  <div className="h-px bg-zinc-850 flex-1"></div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  className="w-full py-3 px-4 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                  </svg>
+                  Sign in with Google
+                </button>
+
                 <p className="text-zinc-500 text-[10px] text-center italic border-t border-zinc-800/80 pt-3">
                   Default: Code: <span className="font-mono text-zinc-400">UGOMENZ2025</span> / Key: <span className="font-mono text-zinc-400">qw123#@</span> / PIN: <span className="font-mono text-zinc-400">12345</span>
                 </p>
@@ -2419,6 +2690,7 @@ END:VCARD`;
             ) : (
               /* Authenticated Staff Standalone Workshop Suite */
               <StaffWorkshopSuite
+                currentUser={currentUser}
                 campaign={campaign}
                 setCampaign={setCampaign}
                 products={products}
