@@ -5,6 +5,8 @@ import {
   ArrowUpDown, Download, Upload
 } from 'lucide-react';
 import { Product, Variant, Review, ManagerStatus, CampaignConfig, GMQuery, AnalyticsData } from '../types';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { db, OperationType, handleFirestoreError } from '../firebase';
 
 interface ImageUploadInputProps {
   label: string;
@@ -200,7 +202,7 @@ export default function StaffWorkshopSuite({
   const [quickNewRow, setQuickNewRow] = useState({
     name: '',
     model: '',
-    category: 'Laptops',
+    category: 'Televisions',
     price: 0,
     promoPrice: 0,
     stockStatus: 'In Stock' as 'In Stock' | 'Out of Stock'
@@ -212,7 +214,7 @@ export default function StaffWorkshopSuite({
     model: '',
     price: 0,
     promoPrice: 0,
-    category: 'Laptops',
+    category: 'Televisions',
     stockStatus: 'In Stock' as 'In Stock' | 'Out of Stock',
     description: '',
     heroImage: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
@@ -1060,6 +1062,12 @@ export default function StaffWorkshopSuite({
                   return out;
                 });
 
+                setDoc(doc(db, 'products', item.id), item)
+                  .catch(err => {
+                    console.error("Firestore sync error:", err);
+                    handleFirestoreError(err, OperationType.CREATE, `products/${item.id}`);
+                  });
+
                 alert(`Success: "${item.name}" registered with ${item.variants.length} color shades!`);
 
                 setNewProduct({
@@ -1067,7 +1075,7 @@ export default function StaffWorkshopSuite({
                   model: '',
                   price: 0,
                   promoPrice: 0,
-                  category: 'Laptops',
+                  category: 'Televisions',
                   stockStatus: 'In Stock',
                   description: '',
                   heroImage: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
@@ -1501,11 +1509,18 @@ export default function StaffWorkshopSuite({
           };
 
           const handleCellChange = (id: string, field: keyof Product, val: any) => {
-            setProducts(prev => {
-              const out = prev.map(p => p.id === id ? { ...p, [field]: val } : p);
-              localStorage.setItem('ug_products_live', JSON.stringify(out));
-              return out;
-            });
+            const updated = products.map(p => p.id === id ? { ...p, [field]: val } : p);
+            setProducts(updated);
+            localStorage.setItem('ug_products_live', JSON.stringify(updated));
+
+            const targetProduct = updated.find(p => p.id === id);
+            if (targetProduct) {
+              setDoc(doc(db, 'products', id), targetProduct)
+                .catch(err => {
+                  console.error("Error syncing product change:", err);
+                  handleFirestoreError(err, OperationType.UPDATE, `products/${id}`);
+                });
+            }
           };
 
           const handleTrash = (id: string, name: string) => {
@@ -1515,6 +1530,12 @@ export default function StaffWorkshopSuite({
                 localStorage.setItem('ug_products_live', JSON.stringify(out));
                 return out;
               });
+
+              deleteDoc(doc(db, 'products', id))
+                .catch(err => {
+                  console.error("Error deleting product:", err);
+                  handleFirestoreError(err, OperationType.DELETE, `products/${id}`);
+                });
             }
           };
 
@@ -1533,18 +1554,27 @@ export default function StaffWorkshopSuite({
             const actionText = bulkModifierPercent > 0 ? `increase by ${bulkModifierPercent}%` : `discount by ${Math.abs(bulkModifierPercent)}%`;
 
             if (window.confirm(`Confirm batch adjustments? This will ${actionText} base prices for category: "${bulkTargetCategory}"`)) {
-              setProducts(prev => {
-                const updated = prev.map(p => {
-                  if (bulkTargetCategory === 'All' || p.category === bulkTargetCategory) {
-                    const nextPrice = Math.max(0, Math.round(p.price * factor));
-                    const nextPromo = p.promoPrice ? Math.max(0, Math.round(p.promoPrice * factor)) : undefined;
-                    return { ...p, price: nextPrice, promoPrice: nextPromo };
-                  }
-                  return p;
-                });
-                localStorage.setItem('ug_products_live', JSON.stringify(updated));
-                return updated;
+              const updated = products.map(p => {
+                if (bulkTargetCategory === 'All' || p.category === bulkTargetCategory) {
+                  const nextPrice = Math.max(0, Math.round(p.price * factor));
+                  const nextPromo = p.promoPrice ? Math.max(0, Math.round(p.promoPrice * factor)) : undefined;
+                  return { ...p, price: nextPrice, promoPrice: nextPromo };
+                }
+                return p;
               });
+              setProducts(updated);
+              localStorage.setItem('ug_products_live', JSON.stringify(updated));
+
+              updated.forEach(p => {
+                if (bulkTargetCategory === 'All' || p.category === bulkTargetCategory) {
+                  setDoc(doc(db, 'products', p.id), p)
+                    .catch(err => {
+                      console.error("Error bulk updating product:", p.id, err);
+                      handleFirestoreError(err, OperationType.UPDATE, `products/${p.id}`);
+                    });
+                }
+              });
+
               alert(`Successfully applied dynamic scaling for ${bulkTargetCategory}!`);
               setBulkModifierPercent(0);
             }
@@ -1557,15 +1587,22 @@ export default function StaffWorkshopSuite({
               return;
             }
             if (window.confirm(`Scale all core catalog prices by a factor of x${targetMultiplier}?`)) {
-              setProducts(prev => {
-                const updated = prev.map(p => {
-                  const nextPrice = Math.round(p.price * targetMultiplier);
-                  const nextPromo = p.promoPrice ? Math.round(p.promoPrice * targetMultiplier) : undefined;
-                  return { ...p, price: nextPrice, promoPrice: nextPromo };
-                });
-                localStorage.setItem('ug_products_live', JSON.stringify(updated));
-                return updated;
+              const updated = products.map(p => {
+                const nextPrice = Math.round(p.price * targetMultiplier);
+                const nextPromo = p.promoPrice ? Math.round(p.promoPrice * targetMultiplier) : undefined;
+                return { ...p, price: nextPrice, promoPrice: nextPromo };
               });
+              setProducts(updated);
+              localStorage.setItem('ug_products_live', JSON.stringify(updated));
+
+              updated.forEach(p => {
+                setDoc(doc(db, 'products', p.id), p)
+                  .catch(err => {
+                    console.error("Error bulk recalibrating product:", p.id, err);
+                    handleFirestoreError(err, OperationType.UPDATE, `products/${p.id}`);
+                  });
+              });
+
               alert(`Successfully scaled catalog prices by factor ${targetMultiplier}!`);
             }
           };
@@ -1599,6 +1636,16 @@ export default function StaffWorkshopSuite({
                     if (window.confirm(`Synchronise Database? This overrides local cache with ${results.length} elements from ${file.name}.`)) {
                       setProducts(results);
                       localStorage.setItem('ug_products_live', JSON.stringify(results));
+
+                      // Restore to Firestore
+                      results.forEach(p => {
+                        setDoc(doc(db, 'products', p.id), p)
+                          .catch((err) => {
+                            console.error("Error restoring product:", p.id, err);
+                            handleFirestoreError(err, OperationType.CREATE, `products/${p.id}`);
+                          });
+                      });
+
                       alert("Administrative database fully restored!");
                     }
                   } else {
@@ -1639,11 +1686,18 @@ export default function StaffWorkshopSuite({
               return next;
             });
 
+            // Firestore Sync
+            setDoc(doc(db, 'products', item.id), item)
+              .catch(err => {
+                console.error("Firestore sync error:", err);
+                handleFirestoreError(err, OperationType.CREATE, `products/${item.id}`);
+              });
+
             alert(`Success: Inline row item "${item.name}" registered!`);
             setQuickNewRow({
               name: '',
               model: '',
-              category: 'Laptops',
+              category: 'Televisions',
               price: 0,
               promoPrice: 0,
               stockStatus: 'In Stock'

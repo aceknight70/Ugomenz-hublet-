@@ -4,9 +4,12 @@ import {
   Truck, ShieldAlert, Phone, Star, GraduationCap, Settings, Search,
   MessageCircle, CheckCircle, Calendar, DollarSign, Lock, MapPin,
   Clock, ArrowRight, Copy, Plus, Trash2, ThumbsUp, Check, Loader2, ArrowUpRight,
-  QrCode, BarChart2, Sliders
+  QrCode, BarChart2, Sliders, Heart, Pin, Maximize2, ChevronLeft, ChevronRight, X,
+  Tv, Snowflake, Flame, RotateCw, Eye, Sun, Layers, ZoomIn, ZoomOut, Wind
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell
@@ -25,14 +28,14 @@ const DEFAULT_PIN = '12345';
 
 const DEFAULT_CAMPAIGN: CampaignConfig = {
   campaignActive: true,
-  campaignTag: 'Special Launch Showcase',
-  headline: 'NEW HP OMNIBOOK FLAGSHIP & LFP SOLAR MATRIX',
-  subHeadline: 'Experience maximum power with our newly arrived pure sine-wave inverters, heavy duty Deye LFP storage blocks and high efficiency Jinko panels. Select, build invoice, and schedule pickup directly.',
-  accentColor: '#E8600A',
-  accentHoverColor: '#ff7518',
+  campaignTag: 'Official Business Showroom',
+  headline: 'UGOMENZ ELECTRONICS - PREMIUM HOME APPLIANCES',
+  subHeadline: 'Unlock top-tier Televisions, Refrigerators, Air Conditioners, and Washing Machines at unbeatable prices. Generate invoices, log secure transactions, and dispatch pickups instantaneously.',
+  accentColor: '#1a6fd4',
+  accentHoverColor: '#1e83f6',
   storeName: 'UGOMENZ ELECTRONICS',
-  storeSubName: 'ELECTRO POINT · WARRI SHOPPING HUBLET',
-  tickerText: '🎉 WELCOME TO THE UGOMENZ DIGITAL HUBLET! CHOOSE, BUILD INVOICE AND SECURELY BOOK DIRECT DECO ROAD DELIVERIES! 🎉',
+  storeSubName: 'ELECTRO POINT · PLAZA DECO ROAD DELIVERIES',
+  tickerText: '🌍 WELCOME TO UGOMENZ ELECTRONICS! SALES & SERVICES FOR WORLD-CLASS TELEVISIONS, FREEZERS, WASHERS AND CONDITIONERS! 🌍',
   tickerActive: true,
   themePreset: 'default',
   snowAnimationActive: false,
@@ -51,6 +54,52 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<string>(() => {
     return localStorage.getItem('ug_last_tab') || 'gallery';
   });
+
+  const [urlReceiptId, setUrlReceiptId] = useState<string | null>(() => {
+    // Look up in hash, pathname, or search query parameters
+    const params = new URLSearchParams(window.location.search);
+    const rQuery = params.get('r');
+    if (rQuery && rQuery.startsWith('RCT-')) return rQuery;
+    
+    const hashMatch = window.location.hash.match(/#\/r\/(RCT-\d{4}-\d{4})/);
+    if (hashMatch) return hashMatch[1];
+
+    const pathMatch = window.location.pathname.match(/\/r\/(RCT-\d{4}-\d{4})/);
+    if (pathMatch) return pathMatch[1];
+
+    return null;
+  });
+
+  const [urlReceiptData, setUrlReceiptData] = useState<any | null>(null);
+  const [loadingUrlReceipt, setLoadingUrlReceipt] = useState<boolean>(false);
+
+  // Watch for changes to URL parameters or active URL receipt ID
+  useEffect(() => {
+    if (urlReceiptId) {
+      setLoadingUrlReceipt(true);
+      import('firebase/firestore').then(({ doc, getDoc }) => {
+        getDoc(doc(db, 'receipts', urlReceiptId))
+          .then((snapshot) => {
+            if (snapshot.exists()) {
+              setUrlReceiptData(snapshot.data());
+            } else {
+              const saved = localStorage.getItem(`ug_receipt_${urlReceiptId}`);
+              if (saved) setUrlReceiptData(JSON.parse(saved));
+            }
+          })
+          .catch((err) => {
+            console.error("Firestore Receipt loading error:", err);
+            const saved = localStorage.getItem(`ug_receipt_${urlReceiptId}`);
+            if (saved) setUrlReceiptData(JSON.parse(saved));
+          })
+          .finally(() => {
+            setLoadingUrlReceipt(false);
+          });
+      });
+    } else {
+      setUrlReceiptData(null);
+    }
+  }, [urlReceiptId]);
 
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('ug_products_list');
@@ -200,25 +249,41 @@ END:VCARD`;
 
     // 1. Subscribe to Products
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
-      if (snapshot.empty) {
-        // First run, let's load initial products into Firestore
+      let containsOldProducts = false;
+      const list: Product[] = [];
+      snapshot.forEach((docSnap) => {
+        const item = docSnap.data() as Product;
+        if (item.category === 'Laptops' || item.category === 'Printers' || item.id === 'hp-omnibook') {
+          containsOldProducts = true;
+        }
+        list.push(item);
+      });
+
+      if (snapshot.empty || containsOldProducts) {
+        // Clear cached local storage keys and trigger clean replacements
+        localStorage.removeItem('ug_products_list');
+        localStorage.removeItem('ug_products_live');
+
+        if (containsOldProducts) {
+          list.forEach((p) => {
+            deleteDoc(doc(db, 'products', p.id))
+              .catch(e => handleFirestoreError(e, OperationType.DELETE, `products/${p.id}`));
+          });
+        }
+
         INITIAL_PRODUCTS.forEach(async (p) => {
           try {
             await setDoc(doc(db, 'products', p.id), p);
           } catch (e) {
-            console.error("Failed to seed product", p.id, e);
+            handleFirestoreError(e, OperationType.CREATE, `products/${p.id}`);
           }
         });
       } else {
-        const list: Product[] = [];
-        snapshot.forEach((docSnap) => {
-          list.push(docSnap.data() as Product);
-        });
         setProducts(list);
         localStorage.setItem('ug_products_list', JSON.stringify(list));
       }
     }, (error) => {
-      console.warn("Products sync read-only or restricted: ", error.message);
+      handleFirestoreError(error, OperationType.LIST, 'products');
     });
 
     // 2. Subscribe to Feedback / Reviews
@@ -232,7 +297,9 @@ END:VCARD`;
         defaultReviews.forEach(async (r) => {
           try {
             await setDoc(doc(db, 'feedback', r.id), r);
-          } catch (e) {}
+          } catch (e) {
+            handleFirestoreError(e, OperationType.CREATE, `feedback/${r.id}`);
+          }
         });
       } else {
         const list: Review[] = [];
@@ -245,7 +312,7 @@ END:VCARD`;
         localStorage.setItem('ug_feedback', JSON.stringify(list));
       }
     }, (error) => {
-      console.warn("Feedback sync read-only or restricted: ", error.message);
+      handleFirestoreError(error, OperationType.LIST, 'feedback');
     });
 
     // 3. Subscribe to GM Queries
@@ -258,7 +325,7 @@ END:VCARD`;
       setGmQueue(list);
       localStorage.setItem('ug_gm_queue', JSON.stringify(list));
     }, (error) => {
-      console.warn("GM Queries sync: ", error.message);
+      handleFirestoreError(error, OperationType.LIST, 'gm_queries');
     });
 
     // 4. Subscribe to Store Campaign Settings
@@ -270,10 +337,10 @@ END:VCARD`;
       } else {
         // Seed campaign settings
         setDoc(doc(db, 'settings', 'campaign'), DEFAULT_CAMPAIGN)
-          .catch(e => console.error("Error seeding campaign settings: ", e));
+          .catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/campaign'));
       }
     }, (error) => {
-      console.warn("Campaign sync: ", error.message);
+      handleFirestoreError(error, OperationType.GET, 'settings/campaign');
     });
 
     // 5. Subscribe to Bank Settings
@@ -289,10 +356,10 @@ END:VCARD`;
           accountName: 'Ugomenz Electronics'
         };
         setDoc(doc(db, 'settings', 'bank'), defaultBank)
-          .catch(e => console.error("Error seeding bank settings: ", e));
+          .catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/bank'));
       }
     }, (error) => {
-      console.warn("Bank sync: ", error.message);
+      handleFirestoreError(error, OperationType.GET, 'settings/bank');
     });
 
     // 6. Subscribe to Managers Status settings
@@ -304,10 +371,10 @@ END:VCARD`;
       } else {
         const defaultMgr: ManagerStatus = { manager: 'Available', financialAdvisor: 'Available', leadTechExpert: 'Available' };
         setDoc(doc(db, 'settings', 'managers'), defaultMgr)
-          .catch(e => console.error("Error seeding manager settings: ", e));
+          .catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/managers'));
       }
     }, (error) => {
-      console.warn("Managers sync: ", error.message);
+      handleFirestoreError(error, OperationType.GET, 'settings/managers');
     });
 
     // 7. Subscribe to Video List
@@ -321,10 +388,50 @@ END:VCARD`;
       } else {
         const defaultVideos = ['https://www.youtube.com/embed/dQw4w9WgXcQ'];
         setDoc(doc(db, 'settings', 'videoList'), { videos: defaultVideos })
-          .catch(e => console.error("Error seeding default videos: ", e));
+          .catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/videoList'));
       }
     }, (error) => {
-      console.warn("Videos sync: ", error.message);
+      handleFirestoreError(error, OperationType.GET, 'settings/videoList');
+    });
+
+    // 8. Subscribe to Socials List
+    const unsubSocials = onSnapshot(doc(db, 'settings', 'socials'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data && Array.isArray(data.socials)) {
+          setSocialsState(data.socials);
+          localStorage.setItem('ug_socials_config_v2', JSON.stringify(data.socials));
+        }
+      } else {
+        const defaults = [
+          { id: 'wa', name: 'WhatsApp Sales Channel', info: 'Direct link to Manager', iconName: 'ThumbsUp', color: 'bg-emerald-600', link: 'https://wa.me/2349060672127?text=Hello%20Ugomenz%20Electronics%20support%20desk!%20I%20am%2520visiting%20from%20your%20official%20Digital%20Hublet.' },
+          { id: 'fb', name: 'Facebook', info: 'Ugomenz Electronics official page', iconName: 'Share2', color: 'bg-blue-600', link: 'https://facebook.com' },
+          { id: 'ig', name: 'Instagram', info: '@ugomenzelectronics official showcase', iconName: 'ImageIcon', color: 'bg-gradient-to-tr from-yellow-500 to-purple-600', link: 'https://instagram.com' },
+          { id: 'tt', name: 'TikTok', info: '@ugomenzelectronics tech demos', iconName: 'PlayCircle', color: 'bg-zinc-900', link: 'https://tiktok.com' },
+          { id: 'yt', name: 'YouTube', info: 'Product demonstrations & unpackings', iconName: 'PlayCircle', color: 'bg-red-600', link: 'https://youtube.com' },
+          { id: 'web', name: 'Official Website', info: 'ugomenzelectronics.com (Planned Phase 3)', iconName: 'Store', color: 'bg-indigo-700', link: '#' }
+        ];
+        setDoc(doc(db, 'settings', 'socials'), { socials: defaults })
+          .catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/socials'));
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/socials');
+    });
+
+    // 9. Subscribe to Gallery Photos
+    const unsubGallery = onSnapshot(doc(db, 'settings', 'gallery'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data && Array.isArray(data.photos)) {
+          setShowroomPhotos(data.photos);
+          localStorage.setItem('ug_extra_photos', JSON.stringify(data.photos));
+        }
+      } else {
+        setDoc(doc(db, 'settings', 'gallery'), { photos: INITIAL_SHOWROOM_PHOTOS })
+          .catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings/gallery'));
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/gallery');
     });
 
     // Validate connection to Firestore (CRITICAL limit validation rule in SDK skill)
@@ -349,6 +456,8 @@ END:VCARD`;
       unsubBank();
       unsubManagers();
       unsubVideos();
+      unsubSocials();
+      unsubGallery();
     };
   }, []);
 
@@ -445,10 +554,29 @@ END:VCARD`;
   // ----------------------------------------------------
   // ACTIVE GALLERY VIEW (Room 1)
   // ----------------------------------------------------
+  const [activeGalleryCategory, setActiveGalleryCategory] = useState<string>('All');
   const [selectedGalleryProductId, setSelectedGalleryProductId] = useState<string>(products[0]?.id || '');
   const selectedGalleryProduct = useMemo(() => {
     return products.find(p => p.id === selectedGalleryProductId) || products[0];
   }, [products, selectedGalleryProductId]);
+
+  const filteredGalleryProducts = useMemo(() => {
+    if (activeGalleryCategory === 'All') return products;
+    return products.filter(p => p.category === activeGalleryCategory);
+  }, [products, activeGalleryCategory]);
+
+  // Synchronise selected product when category changes in gallery tab
+  useEffect(() => {
+    if (activeGalleryCategory !== 'All' && selectedGalleryProduct) {
+      if (selectedGalleryProduct.category !== activeGalleryCategory) {
+        const matching = products.filter(p => p.category === activeGalleryCategory);
+        if (matching.length > 0) {
+          setSelectedGalleryProductId(matching[0].id);
+          setActiveGalleryColorIdx(-1);
+        }
+      }
+    }
+  }, [activeGalleryCategory, products, selectedGalleryProduct]);
 
   // Gallery Sub-states
   const [activeGalleryColorIdx, setActiveGalleryColorIdx] = useState<number>(-1); // -1 is base product
@@ -540,11 +668,31 @@ END:VCARD`;
   });
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
+  // Pinterest Board, Pinning, and Fullscreen lightbox states
+  const [activeLightboxPhotoIdx, setActiveLightboxPhotoIdx] = useState<number | null>(null);
+  const [myPinnedPhotos, setMyPinnedPhotos] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('ug_pinned_showroom_photos');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleTogglePinPhoto = (photoId: string) => {
+    setMyPinnedPhotos((prev) => {
+      const isPinned = prev.includes(photoId);
+      const next = isPinned ? prev.filter((id) => id !== photoId) : [...prev, photoId];
+      localStorage.setItem('ug_pinned_showroom_photos', JSON.stringify(next));
+      return next;
+    });
+  };
+
   useEffect(() => {
     localStorage.setItem('ug_showroom_category', activeCategoryFilter);
   }, [activeCategoryFilter]);
 
-  const categories = ['All', 'Laptops', 'Printers', 'Solar', 'Desktops', 'CCTV', 'Networking', 'Monitors', 'Accessories'];
+  const categories = ['All', 'Televisions', 'Refrigerators', 'Washing Machines', 'Air Conditioners', 'Kitchen Appliances', 'Solar', 'CCTV'];
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -670,12 +818,40 @@ END:VCARD`;
   }));
 
   // ----------------------------------------------------
-  // INVOICE PAYMENT FLOW (Room 7)
+  // UPGRADED RECEIPT GENERATOR FLOW (Room 7)
   // ----------------------------------------------------
   const [copiedInvoice, setCopiedInvoice] = useState(false);
-  const [buyerName, setBuyerName] = useState('');
-  const [payAmount, setPayAmount] = useState('');
+  const [receiptPurpose, setReceiptPurpose] = useState('TV');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [amountPaid, setAmountPaid] = useState('');
+  const [productDescription, setProductDescription] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Bank Transfer');
+  const [balanceOwed, setBalanceOwed] = useState('');
+  const [issuedBy, setIssuedBy] = useState('');
   const [receiptGenerated, setReceiptGenerated] = useState<any | null>(null);
+  const [receiptsList, setReceiptsList] = useState<any[]>(() => {
+    const saved = localStorage.getItem('ug_receipts_list');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Subscribe and sync receipts in real time
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'receipts'), (snapshot) => {
+      const list: any[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (list.length > 0) {
+        setReceiptsList(list);
+        localStorage.setItem('ug_receipts_list', JSON.stringify(list));
+      }
+    }, (error) => {
+      console.warn("Real-time receipts subscription issue:", error);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleCopyAccount = () => {
     navigator.clipboard.writeText(bank.accountNumber);
@@ -683,20 +859,231 @@ END:VCARD`;
     setTimeout(() => setCopiedInvoice(false), 2000);
   };
 
-  const handleConfirmPaid = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!buyerName.trim() || !payAmount) return;
+  const downloadReceiptPDF = (receipt: any) => {
+    if (!receipt) return;
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
 
-    const receipt = {
-      receiptNo: `UGM-${Math.floor(Math.random() * 89999) + 10000}`,
-      buyer: buyerName,
-      amount: Number(payAmount),
+    const primaryColor = [26, 111, 212]; 
+    const darkColor = [10, 14, 26];      
+    
+    // Outer Border Frame
+    doc.setFillColor(255, 255, 255);
+    doc.rect(10, 10, 190, 277, 'F');
+    doc.setDrawColor(215, 225, 240);
+    doc.rect(10, 10, 190, 277, 'S');
+
+    // Branding Blue Accent Strip
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(10, 10, 190, 4, 'F');
+
+    // Corporate Letterhead Header
+    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text("UGOMENZ ELECTRONICS", 105, 30, { align: "center" });
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(95, 105, 120);
+    doc.text("Your Trusted Home Electronics & Appliances Store", 105, 36, { align: "center" });
+    
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Official Digital Showroom Plazas · Deco Road Delta", 105, 41, { align: "center" });
+
+    // Header Divider Line
+    doc.setDrawColor(220, 230, 245);
+    doc.line(20, 48, 190, 48);
+
+    // Receipt Category Title
+    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("OFFICIAL PAYMENT RECEIPT", 20, 58);
+
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFontSize(11);
+    doc.text(`SLIP ID: ${receipt.receiptNo}`, 190, 58, { align: "right" });
+
+    // Left Column: Customer Details Box
+    doc.setFillColor(248, 251, 255);
+    doc.rect(20, 66, 80, 40, 'F');
+    doc.setDrawColor(225, 233, 246);
+    doc.rect(20, 66, 80, 40, 'S');
+
+    doc.setTextColor(90, 100, 120);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text("CUSTOMER COORDINATES", 24, 72);
+    
+    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    doc.setFontSize(10.5);
+    doc.text(receipt.customerName || "N/A", 24, 80);
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Phone: ${receipt.customerPhone || "N/A"}`, 24, 88);
+
+    // Right Column: Transaction Metrics
+    doc.setFillColor(248, 251, 255);
+    doc.rect(110, 66, 80, 40, 'F');
+    doc.setDrawColor(225, 233, 246);
+    doc.rect(110, 66, 80, 40, 'S');
+
+    doc.setTextColor(90, 100, 120);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text("TRANSACTION METRICS", 114, 72);
+    
+    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Date Issued: ${receipt.dateStr || "N/A"}`, 114, 80);
+    doc.text(`Receipt Gen: ${receipt.purpose || "N/A"}`, 114, 88);
+    doc.text(`Payment Mode: ${receipt.paymentMethod || "N/A"}`, 114, 96);
+
+    // Product Description Table
+    doc.setFillColor(245, 249, 255);
+    doc.rect(20, 114, 170, 8, 'F');
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text("PRODUCT / SERVICE DESCRIPTION", 25, 119);
+
+    doc.setDrawColor(220, 228, 242);
+    doc.rect(20, 114, 170, 48, 'S');
+    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    
+    // Split long descriptions to prevent overflow
+    doc.setFont("Courier", "normal");
+    doc.setFontSize(10);
+    const splitDesc = doc.splitTextToSize(receipt.description || "No description provided", 158);
+    doc.text(splitDesc, 25, 131);
+
+    // Ledger Status & Calculation Box
+    doc.setFillColor(248, 251, 255);
+    doc.rect(20, 172, 170, 32, 'F');
+    doc.setDrawColor(225, 233, 246);
+    doc.rect(20, 172, 170, 32, 'S');
+
+    doc.setTextColor(90, 100, 120);
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.text("NET AMOUNT REMITTED:", 25, 185);
+    doc.text("LEDGER BALANCE STATUS:", 25, 195);
+
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(14.5);
+    doc.text(`N${receipt.amount ? receipt.amount.toLocaleString() : '0'}.00`, 90, 185);
+
+    if (Number(receipt.balance) > 0) {
+      doc.setTextColor(215, 45, 45); 
+      doc.setFontSize(10.5);
+      doc.text(`Owed: N${Number(receipt.balance).toLocaleString()}.00 (Remaining Balance)`, 90, 195);
+    } else {
+      doc.setTextColor(30, 150, 80); 
+      doc.setFontSize(11);
+      doc.text("PAID IN FULL", 90, 195);
+    }
+
+    // Footers Separation
+    doc.setDrawColor(225, 233, 246);
+    doc.line(20, 220, 190, 220);
+
+    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(`Issued By Staff: ${receipt.issuedBy || "Manager"}`, 20, 234);
+    
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(110, 120, 140);
+    doc.text("Representative: +234 906 067 2127", 20, 240);
+
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    doc.text("Thank you for your patronage!", 190, 234, { align: "right" });
+    
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(110, 120, 140);
+    doc.text(`${bank.bank} · Acct No: ${bank.accountNumber}`, 190, 240, { align: "right" });
+
+    // Official Digital Stamp base strip
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(10, 281, 190, 2, 'F');
+
+    doc.save(`UGOMENZ_RECEIPT_${receipt.receiptNo}.pdf`);
+  };
+
+  const downloadReceiptPNG = (elementId: string, receiptNo: string) => {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    html2canvas(element, {
+      backgroundColor: '#0a0e1a',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    }).then((canvas) => {
+      const link = document.createElement('a');
+      link.download = `UGOMENZ_RECEIPT_${receiptNo}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+  };
+
+  const handleReceiptSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerName.trim() || !customerPhone.trim() || !amountPaid || !productDescription.trim() || !issuedBy.trim()) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    const nextCounter = receiptsList.length + 1;
+    const formattedCounter = String(nextCounter).padStart(4, '0');
+    const newReceiptId = `RCT-2026-${formattedCounter}`;
+
+    const newReceipt = {
+      id: newReceiptId,
+      receiptNo: newReceiptId,
+      purpose: receiptPurpose,
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      amount: Number(amountPaid),
+      description: productDescription.trim(),
+      paymentMethod: paymentMethod,
+      balance: balanceOwed ? Number(balanceOwed) : 0,
+      issuedBy: issuedBy.trim(),
       dateStr: new Date().toLocaleDateString('en-NG', { dateStyle: 'medium' }),
-      bank: bank.bank,
-      accountNo: bank.accountNumber,
+      createdAt: Date.now(),
+      bankDetails: `${bank.bank} · Acct: ${bank.accountNumber}`,
     };
 
-    setReceiptGenerated(receipt);
+    const updatedList = [newReceipt, ...receiptsList];
+    setReceiptsList(updatedList);
+    localStorage.setItem('ug_receipts_list', JSON.stringify(updatedList));
+    localStorage.setItem(`ug_receipt_${newReceiptId}`, JSON.stringify(newReceipt));
+
+    // Show active receipt
+    setReceiptGenerated(newReceipt);
+
+    // Save to Firestore so it can be loadable globally
+    try {
+      await setDoc(doc(db, 'receipts', newReceiptId), newReceipt);
+    } catch (err) {
+      console.error("Firestore sync error:", err);
+    }
+
+    // Reset customer-specific fields
+    setCustomerName('');
+    setCustomerPhone('');
+    setAmountPaid('');
+    setProductDescription('');
+    setBalanceOwed('');
   };
 
   // ----------------------------------------------------
@@ -834,9 +1221,33 @@ END:VCARD`;
   useEffect(() => {
     if (isStaffAuthenticated && currentUser && videoList.length > 0) {
       setDoc(doc(db, 'settings', 'videoList'), { videos: videoList })
-        .catch(err => console.warn("Error syncing video list to Firestore", err));
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, 'settings/videoList'));
     }
   }, [videoList, isStaffAuthenticated, currentUser]);
+
+  // Real-time Campaign cloud synchronizer
+  useEffect(() => {
+    if (isStaffAuthenticated && currentUser && campaign) {
+      setDoc(doc(db, 'settings', 'campaign'), campaign)
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, 'settings/campaign'));
+    }
+  }, [campaign, isStaffAuthenticated, currentUser]);
+
+  // Real-time Socials cloud synchronizer
+  useEffect(() => {
+    if (isStaffAuthenticated && currentUser && socialsState.length > 0) {
+      setDoc(doc(db, 'settings', 'socials'), { socials: socialsState })
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, 'settings/socials'));
+    }
+  }, [socialsState, isStaffAuthenticated, currentUser]);
+
+  // Real-time Gallery cloud synchronizer
+  useEffect(() => {
+    if (isStaffAuthenticated && currentUser && showroomPhotos.length > 0) {
+      setDoc(doc(db, 'settings', 'gallery'), { photos: showroomPhotos })
+        .catch(err => handleFirestoreError(err, OperationType.WRITE, 'settings/gallery'));
+    }
+  }, [showroomPhotos, isStaffAuthenticated, currentUser]);
   const [staffTab, setStaffTab] = useState<'campaign' | 'catalog' | 'analytics' | 'experts' | 'tickets'>('campaign');
   const [campaignWorkbenchTab, setCampaignWorkbenchTab] = useState<'presets' | 'tickers' | 'products' | 'videos' | 'socials'>('presets');
   const [spreadsheetSearch, setSpreadsheetSearch] = useState('');
@@ -845,7 +1256,7 @@ END:VCARD`;
     model: '',
     price: 0,
     promoPrice: 0,
-    category: 'Laptops',
+    category: 'Televisions',
     stockStatus: 'In Stock' as 'In Stock' | 'Out of Stock',
     description: '',
     heroImage: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
@@ -876,12 +1287,19 @@ END:VCARD`;
 
   const [staffError, setStaffError] = useState('');
 
-  const handleStaffLogin = (e: React.FormEvent) => {
+  const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (staffCode === MGR_CODE && staffKey === MGR_KEY && staffPin === DEFAULT_PIN) {
-      setIsStaffAuthenticated(true);
-      localStorage.setItem('ug_staff_auth', 'true');
-      setStaffError('');
+      try {
+        const { signInAnonymously } = await import('firebase/auth');
+        await signInAnonymously(auth);
+        setIsStaffAuthenticated(true);
+        localStorage.setItem('ug_staff_auth', 'true');
+        setStaffError('');
+      } catch (err: any) {
+        console.error("Firebase Anonymous Login Failed: ", err);
+        setStaffError('Database authentication error: ' + err.message);
+      }
     } else {
       setStaffError('Incorrect Code, Key, or PIN combination. Try again.');
     }
@@ -1139,6 +1557,179 @@ END:VCARD`;
     );
   }
 
+  // Dynamic Receipt Page overlay
+  if (urlReceiptId) {
+    return (
+      <div className="min-h-screen bg-[#0a0e1a] text-white flex flex-col justify-center items-center p-4 md:p-8 font-sans">
+        <div className="max-w-xl w-full space-y-6 animate-scaleIn">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[#1a6fd4] animate-ping"></span>
+              <span className="font-syne font-black text-xs uppercase tracking-widest text-[#1a6fd4]">Ugomenz Digital Engine</span>
+            </div>
+            <button
+              onClick={() => {
+                setUrlReceiptId(null);
+                // Clear query params to make routing pristine
+                const newurl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
+                window.history.pushState({path:newurl}, '', newurl);
+              }}
+              className="text-xs text-zinc-400 hover:text-white px-3 py-1.5 rounded-lg border border-[#1a6fd4]/30 bg-zinc-900/40 hover:bg-[#1a6fd4] transition-all cursor-pointer font-syne font-extrabold uppercase tracking-widest flex items-center gap-1"
+            >
+              <ArrowRight className="w-3 h-3 rotate-180 text-white" />
+              View Business Page
+            </button>
+          </div>
+
+          {loadingUrlReceipt ? (
+            <div className="bg-[#0F172A] border border-zinc-850 p-12 rounded-3xl flex flex-col items-center justify-center space-y-4 shadow-2xl">
+              <Loader2 className="w-8 h-8 text-[#1a6fd4] animate-spin" />
+              <p className="text-xs text-zinc-400 font-mono">Synchronizing receipt #{urlReceiptId} from Cloud Storage...</p>
+            </div>
+          ) : urlReceiptData ? (
+            <div className="space-y-4">
+              {/* Receipt Visual Card */}
+              <div 
+                id="url-receipt-card-print" 
+                className="bg-gradient-to-b from-[#0F172A] to-[#050B18] border border-zinc-800 p-6 md:p-8 rounded-3xl space-y-6 shadow-2xl relative overflow-hidden text-left"
+              >
+                <div className="absolute top-0 right-0 h-2 w-1/3 bg-[#1a6fd4]"></div>
+                
+                {/* Branding Banner */}
+                <div className="text-center border-b border-zinc-800/80 pb-6 space-y-1">
+                  <h2 className="text-xl md:text-2xl font-syne font-black uppercase text-white tracking-wider">
+                    UGOMENZ ELECTRONICS
+                  </h2>
+                  <p className="text-[10px] text-zinc-400 uppercase tracking-widest">
+                    Your Trusted Home Electronics & Appliances Store
+                  </p>
+                  <p className="text-[9px] text-[#1a6fd4] tracking-wider font-mono">
+                    Official Digital Showroom Plazas · Deco Road Delta
+                  </p>
+                </div>
+
+                {/* Receipt Title Section */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div>
+                    <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block">DOCUMENT CATEGORY</span>
+                    <h3 className="text-sm font-syne font-black uppercase text-[#1a6fd4]">
+                      OFFICIAL PAYMENT RECEIPT
+                    </h3>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block">SLIP ID</span>
+                    <p className="text-xs text-emerald-400 font-bold font-mono uppercase">
+                      {urlReceiptData.receiptNo}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Recipient Coordinates */}
+                <div className="grid grid-cols-2 gap-4 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-905 text-xs">
+                  <div>
+                    <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider block mb-1">CUSTOMER COORDINATES</span>
+                    <p className="font-extrabold text-zinc-205 capitalize">{urlReceiptData.customerName}</p>
+                    <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{urlReceiptData.customerPhone}</p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider block mb-1">TRANSACTION DETAILS</span>
+                    <p className="text-zinc-200"><span className="text-zinc-505">Date:</span> {urlReceiptData.dateStr}</p>
+                    <p className="text-zinc-200"><span className="text-zinc-505">Purpose:</span> {urlReceiptData.purpose} Receipt</p>
+                    <p className="text-zinc-200"><span className="text-zinc-505">Method:</span> {urlReceiptData.paymentMethod}</p>
+                  </div>
+                </div>
+
+                {/* Description Box */}
+                <div className="space-y-2">
+                  <span className="text-[9px] text-zinc-505 uppercase font-bold tracking-wider block">PRODUCT/SERVICE DESCRIPTION</span>
+                  <div className="bg-[#050B18] border border-zinc-900 p-4 rounded-xl text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap">
+                    {urlReceiptData.description}
+                  </div>
+                </div>
+
+                {/* Ledger Calculations */}
+                <div className="border-t border-b border-zinc-800/60 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <p className="text-[11px] text-zinc-500 font-mono uppercase tracking-widest">AMOUNT REMITTED</p>
+                    <p className="text-2xl font-syne font-black text-white mt-1">
+                      ₦{urlReceiptData.amount ? urlReceiptData.amount.toLocaleString() : '0'}
+                    </p>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="text-[11px] text-zinc-505 font-mono uppercase tracking-widest">LEDGER BALANCE STATUS</p>
+                    {Number(urlReceiptData.balance) > 0 ? (
+                      <div className="inline-flex items-center gap-1 px-3 py-1 bg-red-950/40 border border-red-500/30 text-red-400 rounded-full font-mono text-xs font-bold mt-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                        Owed: ₦{Number(urlReceiptData.balance).toLocaleString()} (Remaining)
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 rounded-full font-mono text-xs font-bold mt-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 font-mono"></span>
+                        PAID IN FULL
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer Brand Note & Bank Info */}
+                <div className="pt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-[10px] text-zinc-500">
+                  <div className="space-y-0.5">
+                    <p className="font-extrabold text-zinc-400">Issued By: {urlReceiptData.issuedBy}</p>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="font-semibold text-zinc-400">Thank you for your patronage!</p>
+                    <p className="font-mono text-[9px]">{urlReceiptData.bankDetails || `GTBank · Acct: ${bank.accountNumber}`}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons for View Receipts */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  onClick={() => downloadReceiptPDF(urlReceiptData)}
+                  className="py-3 px-2.5 bg-gradient-to-r from-blue-600 to-[#1a6fd4] hover:from-blue-700 hover:to-blue-600 text-white rounded-xl text-xs font-syne font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/10 cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-white" />
+                  PDF Copy
+                </button>
+                
+                <button
+                  onClick={() => downloadReceiptPNG('url-receipt-card-print', urlReceiptData.receiptNo)}
+                  className="py-3 px-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-200 hover:text-white rounded-xl text-xs font-syne font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ImageIcon className="w-4 h-4 text-zinc-400" />
+                  PNG Download
+                </button>
+
+                <button
+                  onClick={() => {
+                    const waTxt = `Hello ${urlReceiptData.customerName},\n\nThank you for your payment of ₦${urlReceiptData.amount.toLocaleString()} to UGOMENZ ELECTRONICS.\n\nYour receipt is ready:\n📎 ugomenz.png.recipt/r/${urlReceiptData.receiptNo}\n\nThank you for choosing UGOMENZ ELECTRONICS!`;
+                    window.open(waLink(urlReceiptData.customerPhone, waTxt), '_blank');
+                  }}
+                  className="py-3 px-2.5 bg-[#25D366] hover:bg-[#1fba4f] text-white rounded-xl text-xs font-syne font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-green-500/10 cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4 text-white" />
+                  Send WhatsApp
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-[#0F172A] border border-zinc-850 p-12 rounded-3xl text-center space-y-4 shadow-2xl">
+              <p className="text-red-400 font-syne font-black uppercase text-sm">Receipt Not Found</p>
+              <p className="text-xs text-zinc-400 font-mono">The receipt code #{urlReceiptId} is not synchronized or was removed.</p>
+              <button
+                onClick={() => setUrlReceiptId(null)}
+                className="px-6 py-2.5 bg-[#1a6fd4] text-white rounded-xl text-xs font-syne font-black uppercase tracking-wider cursor-pointer"
+              >
+                Go Back Home
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ----------------------------------------------------
   // MAIN CORE APPLICATION (Tabs)
   // ----------------------------------------------------
@@ -1312,26 +1903,93 @@ END:VCARD`;
         {/* ROOM 1: GALLERY */}
         {currentTab === 'gallery' && (
           <div id="room-gallery" className="space-y-6 animate-scaleIn">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0F172A] p-4 rounded-xl border border-zinc-800">
-              <div>
-                <h3 className="text-lg font-syne font-extrabold uppercase">Product Interactive Inspection</h3>
-                <p className="text-xs text-zinc-400">Pinch or scale to inspect multi-angles & variant sets prior to shopping.</p>
+            {/* Unique & Fantastic Category Navigation Block */}
+            <div className="bg-[#0F172A] p-6 rounded-2xl border border-zinc-800 space-y-6 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 h-1.5 w-1/4 bg-[#E8600A] rounded-tr-2xl"></div>
+              
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="text-lg font-syne font-extrabold uppercase text-white tracking-wider flex items-center gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#E8600A] animate-pulse"></span>
+                    Interactive Product Inspector
+                  </h3>
+                  <p className="text-xs text-zinc-400">Pinch or scale to inspect multi-angles & variant sets prior to ordering.</p>
+                </div>
               </div>
-              <div className="w-full sm:w-auto">
-                <select
-                  value={selectedGalleryProductId}
-                  onChange={e => {
-                    setSelectedGalleryProductId(e.target.value);
-                    setActiveGalleryColorIdx(-1);
-                  }}
-                  className="w-full sm:w-64 bg-[#0A0F1E] text-white text-xs border border-zinc-700 rounded-lg p-2.5 focus:outline-none focus:border-[#E8600A]"
-                >
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} {p.price > 0 ? `(₦${p.price.toLocaleString()})` : ''}
-                    </option>
-                  ))}
-                </select>
+
+              {/* Unique Visual Category Tabs with Icons */}
+              <div className="flex gap-2.5 overflow-x-auto no-scrollbar scroll-smooth pb-2 border-b border-zinc-800/80">
+                {categories.map((cat) => {
+                  let CategoryIcon = Layers;
+                  if (cat === 'Televisions') CategoryIcon = Tv;
+                  else if (cat === 'Refrigerators') CategoryIcon = Snowflake;
+                  else if (cat === 'Washing Machines') CategoryIcon = RotateCw;
+                  else if (cat === 'Air Conditioners') CategoryIcon = Wind;
+                  else if (cat === 'Kitchen Appliances') CategoryIcon = Flame;
+                  else if (cat === 'Solar') CategoryIcon = Sun;
+                  else if (cat === 'CCTV') CategoryIcon = Eye;
+
+                  const isActive = activeGalleryCategory === cat;
+                  return (
+                    <button
+                      key={`gal-cat-${cat}`}
+                      type="button"
+                      onClick={() => setActiveGalleryCategory(cat)}
+                      className={`px-4 py-2.5 rounded-xl border text-[10px] sm:text-xs font-syne font-extrabold uppercase tracking-widest shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                        isActive
+                          ? 'bg-gradient-to-r from-[#E8600A] to-orange-500 border-[#E8600A] text-white shadow-lg shadow-[#E8600A]/10'
+                          : 'bg-[#050B18] border-zinc-850 text-zinc-400 hover:text-white hover:border-zinc-700'
+                      }`}
+                    >
+                      <CategoryIcon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-zinc-500'}`} />
+                      <span>{cat}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Horizontal Scrollable Product Slider */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+                  <span>Showroom Deck ({filteredGalleryProducts.length} Items found)</span>
+                  <span className="text-[9px] text-[#E8600A] animate-pulse">Select an item below to load 3D view &rarr;</span>
+                </div>
+                
+                <div className="flex gap-3 overflow-x-auto no-scrollbar pb-3 pt-1 scroll-smooth">
+                  {filteredGalleryProducts.map((p) => {
+                    const isSelected = selectedGalleryProductId === p.id;
+                    return (
+                      <div
+                        key={`gal-sel-card-${p.id}`}
+                        onClick={() => {
+                          setSelectedGalleryProductId(p.id);
+                          setActiveGalleryColorIdx(-1);
+                        }}
+                        className={`min-w-[210px] sm:min-w-[240px] max-w-[250px] p-3 rounded-xl border cursor-pointer transition-all hover:scale-102 flex items-center gap-3 select-none relative ${
+                          isSelected
+                            ? 'border-[#E8600A] shadow-md shadow-[#E8600A]/5 bg-gradient-to-b from-[#0F172A] to-[#050B18] ring-1 ring-[#E8600A]/30'
+                            : 'bg-[#050B18] border-zinc-850 hover:border-zinc-750'
+                        }`}
+                      >
+                        {isSelected && (
+                          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#E8600A]" />
+                        )}
+                        <div className="w-12 h-12 rounded-lg bg-zinc-950 p-1 shrink-0 flex items-center justify-center border border-zinc-800">
+                          <img src={p.heroImage} alt={p.name} className="max-h-full max-w-full object-contain rounded" />
+                        </div>
+                        <div className="min-w-0 flex-grow text-left">
+                          <p className={`text-[11px] font-syne font-extrabold uppercase truncate ${isSelected ? 'text-[#E8600A]' : 'text-zinc-300'}`}>
+                            {p.name}
+                          </p>
+                          <p className="text-[9px] text-zinc-500 font-mono truncate">{p.model || p.category}</p>
+                          <p className="text-[10px] text-white font-mono mt-0.5 font-black">
+                            ₦{p.price.toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -1644,7 +2302,7 @@ END:VCARD`;
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 w-4.5 h-4.5" />
                 <input
                   type="text"
-                  placeholder="Search HP laptops, bifacial panels, printers, batteries, CCTV..."
+                  placeholder="Search Samsung TVs, Scanfrost Fridges, Bruhm Freezers, or solar panels..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="w-full bg-[#0F172A] text-white pl-10 pr-4 py-3 text-xs rounded-xl border border-zinc-800 placeholder-zinc-500 focus:outline-none focus:border-[#E8600A] focus:ring-1 focus:ring-[#E8600A] transition-all"
@@ -1661,12 +2319,16 @@ END:VCARD`;
             {filteredProducts.length > 0 ? (
               <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
                 {filteredProducts.map((prod) => {
-                  // Determine height variant based on product details matching wireframe heights
+                  // Real Pinterest-styled dynamic heights reflecting actual appliance/product geometries
                   let heightClass = "aspect-square";
-                  if (prod.id === 'hp-omnibook' || prod.id === 'jinko-solar-450w' || prod.id === 'deye-lithium-battery') {
-                    heightClass = "aspect-[3/4]"; // Taller heights for flagship products (Page 5)
-                  } else if (prod.id === 'hp-foldable-pc' || prod.id === 'kp3-mini-ups') {
-                    heightClass = "aspect-[4/3]"; // Shorter horizontal profiles
+                  if (prod.category === 'Refrigerators' || prod.id === 'jinko-solar-450w' || prod.category === 'Solar') {
+                    heightClass = "aspect-[3/4]"; // Taller upright products
+                  } else if (prod.category === 'Televisions' || prod.category === 'Air Conditioners') {
+                    heightClass = "aspect-video"; // Broad horizontal screens or split ACs
+                  } else if (prod.category === 'Washing Machines' || prod.category === 'Kitchen Appliances') {
+                    heightClass = "aspect-[4/5]"; // Compact vertical units
+                  } else {
+                    heightClass = "aspect-square";
                   }
 
                   return (
@@ -1676,7 +2338,7 @@ END:VCARD`;
                         setQuickViewProduct(prod);
                         recordRoomVisit(`quick_view_${prod.id}`);
                       }}
-                      className="break-inside-avoid bg-[#0F172A] border border-zinc-800/80 hover:border-[#E8600A] hover:shadow-lg hover:shadow-[#E8600A]/5 rounded-2xl overflow-hidden relative group cursor-pointer transition-all flex flex-col"
+                      className="break-inside-avoid bg-[#0F172A] border border-zinc-800/80 hover:border-[#E8600A] hover:shadow-lg hover:shadow-[#E8600A]/5 rounded-2xl overflow-hidden relative group cursor-pointer transition-all flex flex-col mb-4"
                     >
                       {/* Product full-bleed face */}
                       <div className={`relative ${heightClass} bg-[#050B18] overflow-hidden`}>
@@ -1738,25 +2400,123 @@ END:VCARD`;
               <p className="text-center text-zinc-500 py-12">No products matched your inquiry.</p>
             )}
 
-            {/* Banner of Store walkthrough photos Page 4 */}
+            {/* Banner of Store walkthrough photos Page 4 - Pinterest styled */}
             <div className="bg-[#050D1D] p-5 rounded-2xl border border-zinc-800 space-y-4">
-              <div>
-                <h4 className="text-sm font-syne uppercase font-bold tracking-widest text-[#E8600A]">
-                  UGOMENZ MALL INTERIOR AT A GLANCE
-                </h4>
-                <p className="text-xs text-zinc-400">Actual site photographs from Deco road showroom.</p>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h4 className="text-sm font-syne uppercase font-bold tracking-widest text-[#E8600A] flex items-center gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#E8600A] animate-pulse"></span>
+                    Showroom Hub Walkthrough Pins
+                  </h4>
+                  <p className="text-xs text-zinc-400">Actual high-definition walkthrough photographs from Ugomenz Deco Road Mall, Warri.</p>
+                </div>
+                {myPinnedPhotos.length > 0 && (
+                  <div className="bg-[#E8600A]/10 border border-[#E8600A]/30 rounded-full px-3.5 py-1.5 text-[10px] text-white font-bold flex items-center gap-1.5 backdrop-blur-sm self-start">
+                    <Pin className="w-3 h-3 text-[#E8600A] fill-[#E8600A]" />
+                    <span>My Pinned Hubs ({myPinnedPhotos.length})</span>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {showroomPhotos.slice(0, 4).map((ph, i) => (
-                  <div key={`showroom-photo-${ph.id || i}`} className="group relative rounded-xl overflow-hidden border border-zinc-800 aspect-video bg-[#0A0F1E]">
-                    <img src={ph.imageUrl} alt={ph.title} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-zinc-950/20 to-transparent"></div>
-                    <div className="absolute bottom-2 left-2 text-[10px]">
-                      <p className="text-white font-bold">{ph.title}</p>
+              <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 pt-2">
+                {showroomPhotos.map((ph, i) => {
+                  const isPinned = myPinnedPhotos.includes(ph.id || '');
+                  // Variable height ratios for elegant Pinterest layout
+                  let imageAspect = "aspect-video";
+                  if (i % 3 === 0) {
+                    imageAspect = "aspect-[3/4]"; // Taller portrait pin
+                  } else if (i % 3 === 1) {
+                    imageAspect = "aspect-square"; // Balanced square pin
+                  } else {
+                    imageAspect = "aspect-[4/3]"; // Horizontal split pin
+                  }
+
+                  const simulatedLikes = 85 + (i * 23) % 48;
+                  const simulatedSaves = 18 + (i * 12) % 32;
+
+                  return (
+                    <div
+                      key={`showroom-photo-${ph.id || i}`}
+                      onClick={() => {
+                        setActiveLightboxPhotoIdx(i);
+                        recordRoomVisit(`showroom_inspect_${ph.id || i}`);
+                      }}
+                      className="break-inside-avoid group relative rounded-2xl overflow-hidden border border-zinc-800/80 hover:border-[#E8600A] hover:shadow-xl hover:shadow-[#E8600A]/5 bg-[#0A0F1E] transition-all duration-300 cursor-zoom-in mb-4 flex flex-col"
+                    >
+                      <div className={`relative ${imageAspect} overflow-hidden w-full`}>
+                        <img
+                          src={ph.imageUrl}
+                          alt={ph.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
+                        />
+                        {/* Semi-transparent dark overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-zinc-950/20 to-transparent group-hover:via-zinc-950/45 transition-all duration-305"></div>
+
+                        {/* Top action block: floating Pinterest Save Button, displays on hover */}
+                        <div className="absolute top-3 left-3 right-3 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                          <span className="text-[9px] bg-zinc-950/80 backdrop-blur border border-zinc-700/60 text-zinc-300 px-2 py-1 rounded-full font-bold">
+                            Deco Road Hub
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTogglePinPhoto(ph.id || '');
+                            }}
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-syne uppercase font-extrabold flex items-center gap-1 transition-all ${
+                              isPinned
+                                ? 'bg-[#E8600A] text-white hover:bg-[#ff7518]'
+                                : 'bg-red-600 hover:bg-red-700 text-white shadow-md'
+                            }`}
+                          >
+                            <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-white' : ''}`} />
+                            <span>{isPinned ? 'Pinned' : 'Save'}</span>
+                          </button>
+                        </div>
+
+                        {/* Bottom Metadata & inspect shortcuts */}
+                        <div className="absolute bottom-3 left-3 right-3 flex justify-between items-end z-10">
+                          <div className="max-w-[70%] text-left">
+                            <span className="text-[9px] text-[#E8600A] font-bold uppercase tracking-wider">{`Spot ${i + 1}`}</span>
+                            <p className="text-white font-syne font-black text-xs uppercase leading-tight mt-0.5 truncate drop-shadow">
+                              {ph.title}
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTogglePinPhoto(ph.id || '');
+                              }}
+                              className={`w-7.5 h-7.5 rounded-full flex items-center justify-center border transition-all ${
+                                isPinned
+                                  ? 'bg-[#E8600A] border-[#E8600A] text-white'
+                                  : 'bg-zinc-950/70 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
+                              }`}
+                            >
+                              <Heart className={`w-3.5 h-3.5 ${isPinned ? 'fill-white' : ''}`} />
+                            </button>
+                            <div className="w-7.5 h-7.5 rounded-full bg-[#E8600A] text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                              <Maximize2 className="w-3.5 h-3.5" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Pinterest Description Card underneath */}
+                      <div className="p-3 bg-[#0F172A] border-t border-zinc-800/80 space-y-1.5 text-left flex-grow">
+                        <p className="text-[11px] text-zinc-400 font-medium leading-relaxed line-clamp-2">
+                          {ph.description || "Take an exclusive visual look inside our physical tech & electronics showroom."}
+                        </p>
+                        <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono pt-1">
+                          <span>❤️ {simulatedLikes + (isPinned ? 1 : 0)} likes</span>
+                          <span>📌 {simulatedSaves + (isPinned ? 1 : 0)} pins</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1806,7 +2566,7 @@ END:VCARD`;
               >
                 <input
                   type="text"
-                  placeholder="Ask about HP Laptops, Inverter packs, GTBank numbers, or business hours..."
+                  placeholder="Ask about Samsung TVs, Scanfrost Fridges, Bruhm Freezers, or business hours..."
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   className="flex-grow bg-[#0A0F1E] border border-zinc-700 text-xs px-4 py-3 rounded-xl focus:outline-none focus:border-[#E8600A] text-white"
@@ -1941,106 +2701,463 @@ END:VCARD`;
           </div>
         )}
 
-        {/* ROOM 7: INVOICE */}
+        {/* ROOM 7: INVOICE / RECEIPT GENERATOR */}
         {currentTab === 'invoice' && (
-          <div id="room-invoice" className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-scaleIn">
-            {/* Payment Coordinates instructions */}
-            <div className="md:col-span-7 bg-[#0F172A] border border-zinc-800 p-6 rounded-2xl space-y-6 shadow-xl">
-              <div className="space-y-1">
-                <span className="text-[10px] text-[#E8600A] font-syne uppercase tracking-widest font-extrabold">Room 7 PAYMENT ROUTING</span>
-                <h3 className="text-xl font-syne font-black uppercase text-white">Direct GTBank Payment coordination</h3>
-                <p className="text-xs text-zinc-400">Complete transfer, generate receipt and register status with manager.</p>
+          <div id="room-invoice" className="space-y-8 animate-scaleIn">
+            
+            {/* Payment Coordinates & Header Banner */}
+            <div className="bg-[#0F172A] border border-zinc-800 p-6 rounded-3xl relative overflow-hidden shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="absolute top-0 left-0 h-1 md:h-full w-full md:w-1 bg-[#1a6fd4]"></div>
+              <div className="space-y-1.5 text-left">
+                <span className="text-[10px] text-[#1a6fd4] font-syne uppercase tracking-widest font-extrabold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#1a6fd4] animate-pulse"></span>
+                  ROOM 7 · OFFICIAL DIGITAL CLEARANCE
+                </span>
+                <h3 className="text-xl md:text-2xl font-syne font-black uppercase text-white">
+                  UGOMENZ ELECTRONICS PAYMENT TERMINAL
+                </h3>
+                <p className="text-xs text-zinc-400 max-w-2xl">
+                  Process customer invoice payments, log secure transactions directly to Firestore Cloud, and generate certified digital receipts.
+                </p>
               </div>
 
-              <div className="bg-[#050B18] border border-zinc-800 p-5 rounded-xl space-y-4">
-                <div className="flex justify-between items-center bg-zinc-900/60 p-3 rounded-lg border border-zinc-800">
-                  <div>
-                    <p className="text-[10px] text-[#E8600A] font-bold uppercase tracking-wider">UGOMENZ GTB ACCOUNT</p>
-                    <p className="text-base text-white tracking-widest font-mono font-bold mt-1">{bank.accountNumber}</p>
-                    <p className="text-xs text-zinc-400 mt-1 uppercase font-semibold">{bank.accountName}</p>
-                    <p className="text-[10px] text-green-400 italic mt-0.5 mt-2">● Verified Company Account</p>
-                  </div>
-                  <button
-                    onClick={handleCopyAccount}
-                    className="p-3 bg-[#E8600A] hover:bg-[#ff7518] text-white rounded-lg transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer text-xs font-bold"
-                  >
-                    {copiedInvoice ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copiedInvoice ? 'Copied' : 'Copy'}
-                  </button>
+              {/* Bank Details Badged Card */}
+              <div className="bg-[#050B18] border border-zinc-850 p-4 rounded-2xl flex items-center justify-between gap-6 w-full md:w-auto shrink-0 select-all">
+                <div className="text-left font-mono">
+                  <p className="text-[9px] text-[#1a6fd4] uppercase font-black tracking-wider">OFFICIAL REPOSIT BANK</p>
+                  <p className="text-sm text-white font-bold tracking-widest mt-0.5">{bank.accountNumber}</p>
+                  <p className="text-[10px] text-zinc-400 capitalize mt-0.5">{bank.accountName} · {bank.bank}</p>
                 </div>
-
-                <div className="space-y-2.5 text-xs">
-                  <p className="text-zinc-300 font-bold uppercase">PAYMENT STEPS SHOWN TO CUSTOMER:</p>
-                  <ol className="list-decimal pl-4 space-y-2 text-zinc-400">
-                    <li>Copy verified GTB account number using the copy button above.</li>
-                    <li>Open your smartphone bank application and perform transfer.</li>
-                    <li>Come back here, enter your credentials in the &apos;I Have Paid&apos; sheet on the right to auto-generate a digital slip receipt.</li>
-                    <li>Tap &apos;Send slip to Sales Manager&apos; via pre-filled WhatsApp link immediately.</li>
-                  </ol>
-                </div>
+                <button
+                  onClick={handleCopyAccount}
+                  className="px-3.5 py-2.5 bg-[#1a6fd4] hover:bg-[#1e83f6] text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-syne font-bold uppercase tracking-wider cursor-pointer shrink-0"
+                >
+                  {copiedInvoice ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5 text-white" />}
+                  {copiedInvoice ? 'COPIED' : 'COPY'}
+                </button>
               </div>
             </div>
 
-            {/* Receipt Creator Form */}
-            <div className="md:col-span-5 space-y-4">
-              <div className="bg-[#0F172A] border border-zinc-800 p-5 rounded-2xl space-y-4 shadow-xl">
-                <h4 className="text-sm font-syne font-extrabold uppercase text-white">I HAVE PAID SHEET</h4>
-                <form onSubmit={handleConfirmPaid} className="space-y-3.5">
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Customer/Buyer Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Fortune Akioya"
-                      value={buyerName}
-                      onChange={e => setBuyerName(e.target.value)}
-                      className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
-                    />
+            {/* Core Workspace Side-by-Side: Form and Active Receipt */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+              
+              {/* Left Column: Form Generator (xl:col-span-6) */}
+              <div className="xl:col-span-6 space-y-6">
+                <div className="bg-[#0F172A] border border-zinc-800 p-6 rounded-3xl shadow-xl space-y-6">
+                  <div className="border-b border-zinc-800/80 pb-4 text-left">
+                    <h4 className="text-base font-syne font-black text-white uppercase tracking-wider">
+                      RECEIPT GENERATOR SHEET
+                    </h4>
+                    <p className="text-xs text-[#1a6fd4] mt-0.5 font-mono">Input coordinates below to build verified slip</p>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Total Paid Amount (₦)</label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="e.g. 890000"
-                      value={payAmount}
-                      onChange={e => setPayAmount(e.target.value)}
-                      className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-3 px-4 bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl transition-all"
-                  >
-                    Generate digital transaction receipt
-                  </button>
-                </form>
+
+                  <form onSubmit={handleReceiptSubmit} className="space-y-4 text-xs font-semibold text-left">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Field 1: Receipt Purpose */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Receipt Purpose <span className="text-red-400">*</span></label>
+                        <select
+                          value={receiptPurpose}
+                          onChange={e => setReceiptPurpose(e.target.value)}
+                          className="w-full bg-[#050B18] text-white text-xs border border-zinc-700 hover:border-[#1a6fd4]/40 rounded-xl p-3 focus:outline-none focus:border-[#1a6fd4] transition-all cursor-pointer font-syne font-bold"
+                        >
+                          <option value="TV">TV (Television)</option>
+                          <option value="Fridge">Fridge (Refrigerator)</option>
+                          <option value="AC">Air Conditioner (AC)</option>
+                          <option value="Washing Machine">Washing Machine</option>
+                          <option value="Generator">Power Generator</option>
+                          <option value="Home Theater">Home Theater System</option>
+                          <option value="Sound System">Audio/Sound System</option>
+                          <option value="Small Appliance">Small Appliance</option>
+                          <option value="Service/Repair">Service & Repairs</option>
+                          <option value="Other">Other Items</option>
+                        </select>
+                      </div>
+
+                      {/* Field 2: Customer Name */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Customer Name <span className="text-red-400">*</span></label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Fortune"
+                          value={customerName}
+                          onChange={e => setCustomerName(e.target.value)}
+                          className="w-full bg-[#050B18] border border-zinc-700 hover:border-[#1a6fd4]/40 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#1a6fd4] transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Field 3: Phone Number */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Phone Number (For WhatsApp) <span className="text-red-400">*</span></label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. +2348031234567"
+                          value={customerPhone}
+                          onChange={e => setCustomerPhone(e.target.value)}
+                          className="w-full bg-[#050B18] border border-zinc-700 hover:border-[#1a6fd4]/40 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#1a6fd4] transition-all font-mono"
+                        />
+                      </div>
+
+                      {/* Field 4: Amount Paid */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Amount Paid (₦) <span className="text-red-400">*</span></label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 font-bold font-sans">₦</span>
+                          <input
+                            type="number"
+                            required
+                            placeholder="e.g. 250000"
+                            value={amountPaid}
+                            onChange={e => setAmountPaid(e.target.value)}
+                            className="w-full bg-[#050B18] border border-zinc-700 hover:border-[#1a6fd4]/40 rounded-xl py-3 pl-8 pr-3 text-xs text-white focus:outline-none focus:border-[#1a6fd4] transition-all font-bold font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Field 5: Payment Method */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Payment Mode <span className="text-red-400">*</span></label>
+                        <select
+                          value={paymentMethod}
+                          onChange={e => setPaymentMethod(e.target.value)}
+                          className="w-full bg-[#050B18] text-white text-xs border border-zinc-700 hover:border-[#1a6fd4]/40 rounded-xl p-3 focus:outline-none focus:border-[#1a6fd4] transition-all cursor-pointer font-syne font-bold"
+                        >
+                          <option value="Bank Transfer">Bank Transfer</option>
+                          <option value="Cash">Cash</option>
+                          <option value="POS">POS</option>
+                          <option value="USSD">USSD</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+
+                      {/* Field 6: Balance */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Balance Owed <span className="text-zinc-500">(Optional)</span></label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 font-bold font-sans">₦</span>
+                          <input
+                            type="number"
+                            placeholder="e.g. 0"
+                            value={balanceOwed}
+                            onChange={e => setBalanceOwed(e.target.value)}
+                            className="w-full bg-[#050B18] border border-zinc-700 hover:border-[#1a6fd4]/40 rounded-xl py-3 pl-8 pr-3 text-xs text-white focus:outline-none focus:border-[#1a6fd4] transition-all font-medium font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Field 7: Service/Product Description */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Product/Service Description <span className="text-red-400">*</span></label>
+                      <textarea
+                        required
+                        rows={3}
+                        placeholder="Provide details (e.g. LG Smart TV OLED 65' Thin Q, Serial No: Model-OLED-6539)"
+                        value={productDescription}
+                        onChange={e => setProductDescription(e.target.value)}
+                        className="w-full bg-[#050B18] border border-zinc-700 hover:border-[#1a6fd4]/40 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#1a6fd4] transition-all font-mono"
+                      />
+                    </div>
+
+                    {/* Field 8: Issued By */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Issued By (Staff Name) <span className="text-red-400">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Staff Name"
+                        value={issuedBy}
+                        onChange={e => setIssuedBy(e.target.value)}
+                        className="w-full bg-[#050B18] border border-zinc-700 hover:border-[#1a6fd4]/40 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#1a6fd4] transition-all"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-4 px-4 bg-[#1a6fd4] hover:bg-[#1e83f6] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-2xl transition-all cursor-pointer shadow-lg shadow-[#1a6fd4]/15 mt-2 flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4 text-white" />
+                      Create & Archive Official Receipt
+                    </button>
+                  </form>
+                </div>
               </div>
 
-              {receiptGenerated && (
-                <div className="bg-emerald-950/40 border border-[#25D366]/40 p-5 rounded-2xl space-y-4 shadow-md text-xs">
-                  <div className="flex justify-between items-center text-emerald-400 font-bold">
-                    <span className="font-syne uppercase">Receipt Generated Successfully!</span>
-                    <CheckCircle className="w-4 h-4" />
-                  </div>
+              {/* Right Column: Active Receipt Live Display (xl:col-span-6) */}
+              <div className="xl:col-span-6 space-y-6">
+                {receiptGenerated ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-syne font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <CheckCircle className="w-4 h-4 text-emerald-400" />
+                        PREVIEW OUTLET
+                      </span>
+                      <button
+                        onClick={() => setReceiptGenerated(null)}
+                        className="text-[10px] text-zinc-400 hover:text-white px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer transition-all"
+                      >
+                        Reset Preview
+                      </button>
+                    </div>
 
-                  <div className="bg-[#050B18] border border-zinc-800 p-4 rounded-xl space-y-2 font-mono">
-                    <p className="border-b border-zinc-800 pb-1 text-[#E8600A] font-bold">UGOMENZ MALL TRANSACTION SLIP</p>
-                    <p><span className="text-zinc-500">Receipt No:</span> {receiptGenerated.receiptNo}</p>
-                    <p><span className="text-zinc-500">Full Name:</span> {receiptGenerated.buyer}</p>
-                    <p><span className="text-zinc-500">Sum Paid:</span> ₦{receiptGenerated.amount.toLocaleString()}</p>
-                    <p><span className="text-zinc-500">Bank:</span> {receiptGenerated.bank}</p>
-                    <p><span className="text-zinc-500">Date:</span> {receiptGenerated.dateStr}</p>
-                  </div>
+                    {/* Stunning Interactive Receipt Card */}
+                    <div 
+                      id="room-receipt-card-print" 
+                      className="bg-gradient-to-b from-[#0F172A] to-[#050B18] border border-zinc-800 p-6 md:p-8 rounded-3xl space-y-6 shadow-2xl relative overflow-hidden text-left"
+                    >
+                      <div className="absolute top-0 right-0 h-2 w-1/3 bg-[#1a6fd4]"></div>
+                      
+                      {/* Branding Banner */}
+                      <div className="text-center border-b border-zinc-800/80 pb-6 space-y-1">
+                        <h2 className="text-lg md:text-xl font-syne font-black uppercase text-white tracking-wider">
+                          UGOMENZ ELECTRONICS
+                        </h2>
+                        <p className="text-[10px] text-zinc-400 uppercase tracking-widest">
+                          Your Trusted Home Electronics & Appliances Store
+                        </p>
+                        <p className="text-[9px] text-[#1a6fd4] tracking-wider font-mono">
+                          Official Digital Showroom Plazas · Deco Road Delta
+                        </p>
+                      </div>
 
-                  <a
-                    href={waLink('+2347068767180', `HI FINANCIAL ADVISOR, I CONFIRM I HAVE MADE GTB TRANSFER FOR PAYMENT VALUE ₦${receiptGenerated.amount.toLocaleString()}. REGISTERED RECEIPT: ${receiptGenerated.receiptNo} UNDER BUYER NAME: ${receiptGenerated.buyer}.`)}
-                    target="_blank"
-                    className="w-full py-2.5 px-4 bg-[#25D366] hover:bg-[#1fba4f] text-white text-xs font-syne uppercase font-extrabold tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition-all text-center"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    Send Transaction Receipt on WhatsApp
-                  </a>
+                      {/* Receipt Title Section */}
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div>
+                          <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block">DOCUMENT CATEGORY</span>
+                          <h3 className="text-sm font-syne font-black uppercase text-[#1a6fd4]">
+                            OFFICIAL PAYMENT RECEIPT
+                          </h3>
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block">SLIP ID</span>
+                          <p className="text-xs text-emerald-400 font-bold font-mono uppercase">
+                            {receiptGenerated.receiptNo}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Recipient Coordinates */}
+                      <div className="grid grid-cols-2 gap-4 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-905 text-xs">
+                        <div>
+                          <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider block mb-1">CUSTOMER COORDINATES</span>
+                          <p className="font-extrabold text-zinc-205 capitalize">{receiptGenerated.customerName}</p>
+                          <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{receiptGenerated.customerPhone}</p>
+                          {receiptGenerated.customerEmail && (
+                            <p className="text-[10px] text-[#1a6fd4] truncate max-w-full font-mono">{receiptGenerated.customerEmail}</p>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-zinc-505 uppercase font-bold tracking-wider block mb-1">TRANSACTION DETAILS</span>
+                          <p className="text-zinc-200"><span className="text-zinc-500">Date:</span> {receiptGenerated.dateStr}</p>
+                          <p className="text-zinc-200"><span className="text-zinc-500">Purpose:</span> {receiptGenerated.purpose} Receipt</p>
+                          <p className="text-zinc-200"><span className="text-zinc-500">Method:</span> {receiptGenerated.paymentMethod}</p>
+                        </div>
+                      </div>
+
+                      {/* Description Box */}
+                      <div className="space-y-2">
+                        <span className="text-[9px] text-zinc-550 uppercase font-bold tracking-wider block">PRODUCT/SERVICE DESCRIPTION</span>
+                        <div className="bg-[#050B18] border border-zinc-900 p-4 rounded-xl text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap">
+                          {receiptGenerated.description}
+                        </div>
+                      </div>
+
+                      {/* Ledger Calculations */}
+                      <div className="border-t border-b border-zinc-800/60 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                          <p className="text-[11px] text-zinc-505 font-mono uppercase tracking-widest">AMOUNT REMITTED</p>
+                          <p className="text-xl md:text-2xl font-syne font-black text-white mt-1">
+                            ₦{receiptGenerated.amount.toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <p className="text-[11px] text-zinc-505 font-mono uppercase tracking-widest">LEDGER BALANCE STATUS</p>
+                          {receiptGenerated.balance > 0 ? (
+                            <div className="inline-flex items-center gap-1 px-3 py-1 bg-red-950/40 border border-red-500/30 text-red-400 rounded-full font-mono text-xs font-bold mt-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                              Owed: ₦{receiptGenerated.balance.toLocaleString()} (Remaining)
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 rounded-full font-mono text-xs font-bold mt-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              PAID IN FULL
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Footer Brand Note & Bank Info */}
+                      <div className="pt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-[10px] text-zinc-550">
+                        <div className="space-y-0.5">
+                          <p className="font-extrabold text-zinc-400">Issued By: {receiptGenerated.issuedBy}</p>
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <p className="font-semibold text-zinc-400">Thank you for your patronage!</p>
+                          <p className="font-mono text-[9px]">{bank.bank} · Acct: {bank.accountNumber}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Export Choices Panel */}
+                    <div className="bg-[#0f172a] border border-zinc-800 p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-bold font-syne uppercase">
+                      <button
+                        onClick={() => downloadReceiptPDF(receiptGenerated)}
+                        className="py-3 px-2 bg-gradient-to-r from-blue-600 to-[#1a6fd4] hover:from-blue-700 hover:to-blue-600 text-white rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/10"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-white" />
+                        PDF Export
+                      </button>
+
+                      <button
+                        onClick={() => downloadReceiptPNG('room-receipt-card-print', receiptGenerated.receiptNo)}
+                        className="py-3 px-2 bg-zinc-950 hover:bg-zinc-900 text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer border border-zinc-800 hover:border-zinc-700 flex items-center justify-center gap-1.5"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-zinc-550" />
+                        PNG Image
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const waText = `Hello ${receiptGenerated.customerName},
+
+Thank you for your payment of ₦${receiptGenerated.amount.toLocaleString()} to UGOMENZ ELECTRONICS.
+
+Your receipt is ready:
+📎 ugomenz.png.recipt/r/${receiptGenerated.receiptNo}
+
+Thank you for choosing UGOMENZ ELECTRONICS!`;
+                          window.open(waLink(receiptGenerated.customerPhone, waText), '_blank');
+                        }}
+                        className="py-3 px-2 bg-[#25D366] hover:bg-[#1fba4f] text-white rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-green-500/10"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 text-white" />
+                        WhatsApp
+                      </button>
+                    </div>
+
+                    <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800/80 text-[10px] text-zinc-400 flex items-center gap-2 leading-relaxed">
+                      <span className="shrink-0 bg-[#1a6fd4] text-white font-mono px-1.5 py-0.5 rounded text-[8px] font-black">Link Option</span>
+                      <p className="text-left text-zinc-400">
+                        Interactive Public View short URL and cloud storage syncing are fully compiled. Users clicking <code className="text-[#1a6fd4] font-mono">/r/{receiptGenerated.receiptNo}</code> load this dynamically!
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-[#0f172a] border border-zinc-850 p-12 rounded-3xl text-center space-y-4 h-full flex flex-col justify-center items-center">
+                    <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 text-[#1a6fd4] flex items-center justify-center animate-pulse">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-syne font-black uppercase text-white">No Receipt Selected</h4>
+                      <p className="text-xs text-zinc-400 max-w-xs leading-relaxed mx-auto">
+                        Fill in and submit the receipt form on the left, or select an archived receipt below, to render download and export tools.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Row: ARCHIVED RECEIPTS DATABASE LOG */}
+            <div className="bg-[#0F172A] border border-zinc-800 p-6 rounded-3xl shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-3 border-b border-zinc-800/80">
+                <div className="text-left col-span-1 border-none pb-0">
+                  <h4 className="text-sm font-syne font-black text-white uppercase tracking-wider">
+                    ARCHIVED RECEIPTS JOURNAL ({receiptsList.length})
+                  </h4>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Secure Firestore database ledger synchronization</p>
+                </div>
+                
+                {/* Search field */}
+                <div className="relative w-full sm:w-72">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">
+                    <Search className="w-3.5 h-3.5" />
+                  </span>
+                  <input
+                    type="text"
+                    id="receipt-search-archive"
+                    placeholder="Search by customer name or RCT ID..."
+                    className="w-full bg-[#050B18] border border-zinc-800 focus:border-[#1a6fd4] rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none transition-all font-mono"
+                    onChange={(e) => {
+                      const query = e.target.value.toLowerCase();
+                      const listElements = document.getElementsByClassName('receipt-history-row');
+                      for(let i=0; i<listElements.length; i++) {
+                        const row = listElements[i] as HTMLElement;
+                        const text = row.getAttribute('data-search')?.toLowerCase() || '';
+                        if(text.includes(query)) {
+                          row.style.display = '';
+                        } else {
+                          row.style.display = 'none';
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {receiptsList.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left text-zinc-400 border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-[10px] uppercase font-bold tracking-wider text-zinc-500">
+                        <th className="py-3 px-4">Receipt ID</th>
+                        <th className="py-3 px-4">Customer Name</th>
+                        <th className="py-3 px-4">Purpose</th>
+                        <th className="py-3 px-4">Remitted Sum</th>
+                        <th className="py-3 px-4">Mode</th>
+                        <th className="py-3 px-4">Balance</th>
+                        <th className="py-3 px-4">Date</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {receiptsList.map((r, i) => (
+                        <tr 
+                          key={`arch-${r.receiptNo}-${i}`}
+                          className="receipt-history-row hover:bg-zinc-900/40 p-4 rounded-xl border-b border-zinc-900 transition-all"
+                          data-search={`${r.receiptNo} ${r.customerName} ${r.purpose}`}
+                        >
+                          <td className="py-3 px-4 font-mono font-bold text-emerald-400">{r.receiptNo}</td>
+                          <td className="py-3 px-4 text-white capitalize font-bold">{r.customerName}</td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 bg-[#1a6fd4]/10 text-[#1a6fd4] rounded font-syne font-extrabold text-[10px] uppercase tracking-wider">
+                              {r.purpose}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono font-extrabold text-white">₦{r.amount.toLocaleString()}</td>
+                          <td className="py-3 px-4 font-mono text-[10px]">{r.paymentMethod}</td>
+                          <td className="py-3 px-4 font-mono text-[11px]">
+                            {Number(r.balance) > 0 ? (
+                              <span className="text-red-400 font-bold">₦{Number(r.balance).toLocaleString()}</span>
+                            ) : (
+                              <span className="text-emerald-400 font-bold">Paid In Full</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-zinc-400 text-[11px] font-mono">{r.dateStr}</td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => setReceiptGenerated(r)}
+                                className="px-2.5 py-1 bg-[#1a6fd4]/20 hover:bg-[#1a6fd4] text-[#1a6fd4] hover:text-white text-[10px] font-syne font-black uppercase rounded-lg tracking-wider transition-all cursor-pointer"
+                              >
+                                View Load
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-zinc-500 text-xs italic">
+                  No receipts logged in secure ledger yet. Produce a slip above to populate transactions history.
                 </div>
               )}
             </div>
@@ -2928,15 +4045,138 @@ END:VCARD`;
           </div>
         );
       })()}
-    </div>
-  );
-}
 
-// Compact SVG cancel icon helper
-function X({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
+      {/* PINTEREST SHOWROOM LIGHTBOX MODAL */}
+      {activeLightboxPhotoIdx !== null && (() => {
+        const ph = showroomPhotos[activeLightboxPhotoIdx];
+        if (!ph) return null;
+        const isPinned = myPinnedPhotos.includes(ph.id || '');
+
+        const handlePrevLightbox = () => {
+          setActiveLightboxPhotoIdx(prev => {
+            if (prev === null) return null;
+            return prev === 0 ? showroomPhotos.length - 1 : prev - 1;
+          });
+        };
+
+        const handleNextLightbox = () => {
+          setActiveLightboxPhotoIdx(prev => {
+            if (prev === null) return null;
+            return prev === showroomPhotos.length - 1 ? 0 : prev + 1;
+          });
+        };
+
+        return (
+          <div 
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn"
+            onClick={() => setActiveLightboxPhotoIdx(null)}
+          >
+            <div 
+              className="relative max-w-4xl w-full bg-[#0F172A] rounded-2xl border border-zinc-800 overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[95vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Left Column: Huge High-Res Image Area */}
+              <div className="md:w-3/5 bg-zinc-950 flex items-center justify-center relative p-2 min-h-[300px] md:min-h-[500px]">
+                <img 
+                  src={ph.imageUrl} 
+                  alt={ph.title} 
+                  className="max-h-[60vh] md:max-h-[80vh] max-w-full object-contain rounded-lg shadow-md animate-scaleIn"
+                />
+
+                {/* Navigation Chevrons inside the image viewport */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePrevLightbox();
+                  }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/75 hover:bg-[#E8600A] text-white border border-zinc-800 hover:scale-110 active:scale-95 transition-all z-10 cursor-pointer"
+                  title="Previous Photo"
+                >
+                  <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleNextLightbox();
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/75 hover:bg-[#E8600A] text-white border border-zinc-800 hover:scale-110 active:scale-95 transition-all z-10 cursor-pointer"
+                  title="Next Photo"
+                >
+                  <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+                </button>
+              </div>
+
+              {/* Right Column: Pinterest styled info card */}
+              <div className="md:w-2/5 p-6 md:p-8 flex flex-col justify-between bg-[#0F172A] space-y-6 overflow-y-auto">
+                <div>
+                  <div className="flex justify-between items-center pb-4 border-b border-zinc-800">
+                    <span className="text-[10px] uppercase font-mono tracking-widest text-[#E8600A] font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                      Pinterest Pin Board
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePinPhoto(ph.id || '')}
+                      className={`px-4 py-2 rounded-full text-xs font-syne uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                        isPinned 
+                          ? 'bg-[#E8600A] text-white hover:bg-[#ff7518]' 
+                          : 'bg-red-600 hover:bg-red-750 text-white shadow shadow-red-950/45'
+                      }`}
+                    >
+                      <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-white' : ''}`} />
+                      <span>{isPinned ? 'Pinned' : 'Save Pin'}</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-6 space-y-4 text-left">
+                    <h3 className="text-xl font-syne font-black uppercase text-white tracking-tight leading-tight">
+                      {ph.title}
+                    </h3>
+                    <p className="text-xs text-zinc-400 leading-relaxed bg-[#050B18]/50 p-4 rounded-xl border border-zinc-850">
+                      {ph.description || "Take an exclusive visual look inside our physical tech & electronics department showroom."}
+                    </p>
+                    {isPinned && (
+                      <div className="p-3 bg-red-950/10 border border-red-900/30 rounded-lg text-[10px] text-red-200">
+                        📍 This physical space is pinned in your personal board memory for checkout inquiries!
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-4">
+                  {/* Whatsapp inquiry block */}
+                  <a
+                    href={waLink('+2349060672127', `Hello support, I saw your showroom photo "${ph.title}" in the Pinterest gallery section of your app and wanted to inquire about the physical setup and items displayed.`)}
+                    target="_blank"
+                    className="w-full py-3 px-4 bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl shadow flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Inquire Dept on WhatsApp
+                  </a>
+
+                  {/* Close Lightbox */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveLightboxPhotoIdx(null)}
+                    className="w-full py-3 px-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-750 text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl transition-all cursor-pointer"
+                  >
+                    Close Walkthrough
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Absolute close button on the main lightbox backdrop (top-right of screen) */}
+            <button
+              onClick={() => setActiveLightboxPhotoIdx(null)}
+              className="absolute top-6 right-6 p-3 rounded-full bg-zinc-900/80 border border-zinc-800 text-zinc-400 hover:text-white transition-all hover:scale-105 cursor-pointer z-50"
+            >
+              <X className="w-5 h-5 stroke-[2.5]" />
+            </button>
+          </div>
+        );
+      })()}
+    </div>
   );
 }

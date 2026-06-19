@@ -1,62 +1,174 @@
 import { Product } from './types';
 
-// Let's create realistic Unsplash images for various devices and angles
+// Centered on household electronic appliances & power backups (Hisense, Samsung, Bruhm, Scanfrost, etc.)
 export const INITIAL_PRODUCTS: Product[] = [
   {
-    id: 'hp-omnibook',
-    name: 'HP Omnibook Ultra Flip 14',
-    model: '14-fh0000nia (Flagship)',
-    price: 890000,
-    promoPrice: 850000,
-    category: 'Laptops',
+    id: 'samsung-65-qled',
+    name: 'Samsung 65" QLED 4K Smart TV',
+    model: 'QA65Q60C (Quantum Dot)',
+    price: 850000,
+    promoPrice: 795000,
+    category: 'Televisions',
     stockStatus: 'In Stock',
-    description: 'The premier AI-engineered convertible laptop with Intel Core Ultra processor, gorgeous 3K OLED touchscreen, and incredible 20-hour battery life. Designed for executives, creators, and developers.',
-    heroImage: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
-    angle2: 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80', // Side view
-    angle3: 'https://images.unsplash.com/photo-1629131726692-1accd0c53db0?auto=format&fit=crop&w=800&q=80', // Back / Port view
-    angle4: 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=80', // Close up keyboard
-    angle5: 'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=800&q=80', // Lifestyle
+    description: 'Breathtaking 65-inch ultra-thin smart TV with full quantum dot technology displaying 100% color volume. Equipped with Samsung’s Tizen OS, direct YouTube/Netflix integration, and automated active voice amplification.',
+    heroImage: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=800&q=80',
+    angle2: 'https://images.unsplash.com/photo-1461151304267-38535e780c79?auto=format&fit=crop&w=800&q=80',
     variants: [
       {
-        id: 'hp-omni-space-gray',
-        colorName: 'Space Gray Metallic',
-        sku: 'HP-OMNI-SG14',
-        heroImage: 'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=800&q=80',
-        angle2: 'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=800&q=80',
-        angle3: 'https://images.unsplash.com/photo-1629131726692-1accd0c53db0?auto=format&fit=crop&w=800&q=80'
-      },
-      {
-        id: 'hp-omni-amber-gold',
-        colorName: 'Amber Luxury Gold',
-        sku: 'HP-OMNI-AG14',
-         heroImage: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=800&q=80',
-        angle2: 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80'
+        id: 'sam-65-premium',
+        colorName: 'Standard Titan Gray Frame',
+        sku: 'SAM-QA65-STD',
+        heroImage: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=800&q=80'
       }
     ]
   },
   {
-    id: 'hp-envy-x360',
-    name: 'HP Envy x360 15.6"',
-    model: 'ENVY-15-FE0013DX',
-    price: 730000,
-    category: 'Laptops',
+    id: 'hisense-55-uled',
+    name: 'Hisense 55" Premium ULED Smart TV',
+    model: '55U6H Quantum-LED',
+    price: 430000,
+    promoPrice: 395000,
+    category: 'Televisions',
     stockStatus: 'In Stock',
-    description: 'Premium versatile aluminum chassis with 360-degree hinge, AMD Ryzen 7, 16GB RAM, and vibrant Full HD IPS touchscreen. Ideal for multi-tasking professionals on the go.',
-    heroImage: 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=80',
-    angle2: 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80',
-    angle3: 'https://images.unsplash.com/photo-1496181130204-7552cc14acfc?auto=format&fit=crop&w=800&q=80',
+    description: 'Top-tier Hisense TV featuring local dimming zones, Dolby Vision Atmos, and a high-performance VIDAA smart interface. Delivers supreme high-contrast cinematic entertainment for modern living spaces.',
+    heroImage: 'https://images.unsplash.com/photo-1552975084-6e027cd345c2?auto=format&fit=crop&w=800&q=80',
+    angle2: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=800&q=80',
     variants: []
   },
   {
-    id: 'hp-foldable-pc',
-    name: 'HP Spectre Foldable PC',
-    model: 'Spectre Fold 17',
-    price: 0, // Call for Price as per Page 6 ("HP Foldable (Call for Price)")
-    category: 'Laptops',
-    stockStatus: 'Out of Stock',
-    description: 'Groundbreaking 17-inch foldable OLED hybrid device. Can be used as a tablet, an elegant laptop, or an ultimate desktop monitor. Truly the future of computing (Please call or enquire for current pricing).',
-    heroImage: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=800&q=80',
-    angle2: 'https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=800&q=80',
+    id: 'bruhm-43-smart',
+    name: 'Bruhm 43" Full HD Smart LED TV',
+    model: 'BT-43LED-SM',
+    price: 215000,
+    category: 'Televisions',
+    stockStatus: 'In Stock',
+    description: 'Superb 43-inch frameless high-definition smart television. Powered by Android TV with built-in Wi-Fi and HDMI/USB inputs, perfect for general household use, cozy bedrooms, or guest wings.',
+    heroImage: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'samsung-fridge-510l',
+    name: 'Samsung 510L Side-by-Side Inverter Refrigerator',
+    model: 'RS62R5001M9 Deep-Cold',
+    price: 1350000,
+    promoPrice: 1290000,
+    category: 'Refrigerators',
+    stockStatus: 'In Stock',
+    description: 'Immersive American double-door side-by-side refrigerator. Outfitted with Samsung digital inverter technology, multi-air flow vents, and sleek fingerprint-resistant metallic finish.',
+    heroImage: 'https://images.unsplash.com/photo-1571175432247-fe063c7c4613?auto=format&fit=crop&w=800&q=80',
+    angle2: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'hisense-fridge-250l',
+    name: 'Hisense 250L Smart Bottom-Mount Refrigerator',
+    model: 'RD-25DC Low-Noise',
+    price: 360000,
+    category: 'Refrigerators',
+    stockStatus: 'In Stock',
+    description: 'A stylish and energy-efficient bottom-mount refrigerator. Comes with rapid-cooling technologies, dedicated vegetable crisper compartments, and frost-free cooling technology.',
+    heroImage: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'scanfrost-freezer-250l',
+    name: 'Scanfrost 250L Supreme Deep Chest Freezer',
+    model: 'SFL250ECO Defrost-Master',
+    price: 320000,
+    category: 'Refrigerators',
+    stockStatus: 'In Stock',
+    description: 'A heavy-duty chest freezer ideal for long-term food preservation during power fluctuations. Built with a fast-freezing function, premium rust-resistant interior finish, and heavy-duty compressor.',
+    heroImage: 'https://images.unsplash.com/photo-1571175432247-fe063c7c4613?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'scanfrost-freezer-150l',
+    name: 'Scanfrost 150L Fast-Cooling Chest Freezer',
+    model: 'SFL150ECO Inverter-Ready',
+    price: 245000,
+    category: 'Refrigerators',
+    stockStatus: 'In Stock',
+    description: 'Compact yet high-efficiency chest freezer with thick wall insulation. Keeps food items frozen for up to 100 hours after power cuts. Extremely durable cabinet casing.',
+    heroImage: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'bruhm-freezer-200l',
+    name: 'Bruhm 200L Eco Chest Freezer',
+    model: 'BCF-200SD Double-Door',
+    price: 265000,
+    category: 'Refrigerators',
+    stockStatus: 'In Stock',
+    description: 'Sleek eco-friendly double-compartment freezer from Bruhm. Engineered for extreme tropical climate conditions, low-power draws, and built-in mechanical door key locks.',
+    heroImage: 'https://images.unsplash.com/photo-1571175432247-fe063c7c4613?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'samsung-washer-9kg',
+    name: 'Samsung 9kg Inverter Front-Load Washing Machine',
+    model: 'WW90T4040CX ecoBubble',
+    price: 580000,
+    promoPrice: 540000,
+    category: 'Washing Machines',
+    stockStatus: 'In Stock',
+    description: 'Premium front loading washer with steam hygiene circles and smart ecoBubble care that dissolves soap rapidly even in low temperatures, treating garments with absolute prestige.',
+    heroImage: 'https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?auto=format&fit=crop&w=800&q=80',
+    angle2: 'https://images.unsplash.com/photo-1582735689369-acfe99b574ff?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'scanfrost-washer-8kg',
+    name: 'Scanfrost 8kg Semi-Automatic Dual-Tub Washer',
+    model: 'SFWMT8 Heavy-Duty',
+    price: 175000,
+    category: 'Washing Machines',
+    stockStatus: 'In Stock',
+    description: 'Time-tested semi-automatic dual tub machine allowing simultaneous washing and spin drying. Features robust direct link motors and an elegant plastic anti-rust body frame.',
+    heroImage: 'https://images.unsplash.com/photo-1582735689369-acfe99b574ff?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'scanfrost-cooker-4b',
+    name: 'Scanfrost 4-Burner Gas Cooker with Electric Oven',
+    model: 'SFC5402S Stainless Glass',
+    price: 198000,
+    category: 'Kitchen Appliances',
+    stockStatus: 'In Stock',
+    description: 'Perfect kitchen addition with 4 highly-responsive gas burners, a automatic igniter, double gas-insulated glass oven door, and professional stainless steel stove grates.',
+    heroImage: 'https://images.unsplash.com/photo-1590794056226-79ef3a8147e1?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'bruhm-microwave-20l',
+    name: 'Bruhm 20L Solo Kitchen Microwave Oven',
+    model: 'BGM-20MX Quick-Heat',
+    price: 88000,
+    category: 'Kitchen Appliances',
+    stockStatus: 'In Stock',
+    description: 'Highly reliable and compact solo microwave oven with 6 power-draw level adjustments, rapid speed-defrosting triggers, and user-friendly mechanical control dials.',
+    heroImage: 'https://images.unsplash.com/photo-1574269909862-7e1d70bb8078?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'hisense-ac-15hp',
+    name: 'Hisense 1.5HP Copper Split Air Conditioner',
+    model: 'AS-12TG Super-Cooling',
+    price: 310000,
+    category: 'Air Conditioners',
+    stockStatus: 'In Stock',
+    description: 'Advanced 1.5 HP climate control system with 100% pure copper condenser pipelines, intelligent eco energy-saving sleep modes, and real-time smart auto restart protection.',
+    heroImage: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=800&q=80',
+    variants: []
+  },
+  {
+    id: 'scanfrost-ac-2hp-standing',
+    name: 'Scanfrost 2HP Floor Standing Air Conditioner',
+    model: 'SFAC-2000 Pro-Blink',
+    price: 660000,
+    category: 'Air Conditioners',
+    stockStatus: 'In Stock',
+    description: 'A powerful, heavy-performing, vertical column standing air conditioner offering far-reaching high air delivery. Perfect for grand halls, electronic warehouses, or official office quarters.',
+    heroImage: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=800&q=80',
     variants: []
   },
   {
@@ -76,12 +188,6 @@ export const INITIAL_PRODUCTS: Product[] = [
         colorName: 'Single Component 450W',
         sku: 'JK-SL-450-S',
         heroImage: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=800&q=80'
-      },
-      {
-        id: 'jinko-panel-4pack',
-        colorName: 'Pre-Wired 4-Pack Array',
-        sku: 'JK-SL-450-4P',
-        heroImage: 'https://images.unsplash.com/photo-1548611635-b6e78dee00f5?auto=format&fit=crop&w=800&q=80'
       }
     ]
   },
@@ -92,67 +198,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 185000,
     category: 'Solar',
     stockStatus: 'In Stock',
-    description: 'High frequency intelligent solar inverter with automatic bypass and built-in lithium battery charger. Delivers flawless clean power for home appliances and office IT equipment.',
+    description: 'High frequency intelligent solar inverter with automatic bypass and built-in lithium battery charger. Delivers flawless clean power to backup household appliances like TVs, fans, and mini-fridges during utility failures.',
     heroImage: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=800&q=80',
-    angle2: 'https://images.unsplash.com/photo-1558449028-b53a39d100fc?auto=format&fit=crop&w=800&q=80',
-    variants: []
-  },
-  {
-    id: 'deye-lithium-battery',
-    name: 'Deye Lithium Ion LFP Battery 5.12kWh',
-    model: 'SE-G5.1Pro-B',
-    price: 1200000,
-    category: 'Solar',
-    stockStatus: 'In Stock',
-    description: 'Premium cobalt-free lithium iron phosphate (LFP) battery. Extremely safe, supports floor-standing or heavy wall-mounting, and features automatic cloud cell balancing with live diagnostic apps.',
-    heroImage: 'https://images.unsplash.com/photo-1548611635-b6e78dee00f5?auto=format&fit=crop&w=800&q=80',
-    angle2: 'https://images.unsplash.com/photo-1597484211029-4e7c7a9cfa2e?auto=format&fit=crop&w=800&q=80',
-    variants: []
-  },
-  {
-    id: 'hp-laserjet-m110w',
-    name: 'HP LaserJet M110w Wireless Printer',
-    model: 'HP-M110w-Mono',
-    price: 95000,
-    category: 'Printers',
-    stockStatus: 'In Stock',
-    description: 'The world’s smallest laser printer in its class. Compact, high-precision, printing at super fast speeds of 21ppm. Supports HP Smart app printing and reliable continuous Wi-Fi.',
-    heroImage: 'https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?auto=format&fit=crop&w=800&q=80',
-    angle2: 'https://images.unsplash.com/photo-1512486130939-2c4f79935e4f?auto=format&fit=crop&w=800&q=80',
-    variants: []
-  },
-  {
-    id: 'hp-smarttank-720',
-    name: 'HP Smart Tank 720 All-in-One Inkjet',
-    model: '720-Duplex-Color',
-    price: 140000,
-    category: 'Printers',
-    stockStatus: 'In Stock',
-    description: 'High-capacity cartridge-free smart tank system with dual-band Wi-Fi and automatic double-sided printing. Prints outstanding borderless brochures and crisp multi-page business documents with ultra-low-cost ink refills.',
-    heroImage: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80',
-    variants: []
-  },
-  {
-    id: 'samsung-55-qled',
-    name: 'Samsung 55" QLED 4K Smart TV',
-    model: 'QA55Q60CAK-S',
-    price: 620000,
-    category: 'Monitors',
-    stockStatus: 'In Stock',
-    description: 'Stunning premium televisions loaded with 100% Color Volume quantum dot filter, Object Tracking Sound Lite, and smart dashboard controls. Perfectly blends into any family room or corporate lounge.',
-    heroImage: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=800&q=80',
-    angle2: 'https://images.unsplash.com/photo-1461151304267-38535e780c79?auto=format&fit=crop&w=800&q=80',
-    variants: []
-  },
-  {
-    id: 'firman-generator-3800w',
-    name: 'Firman Rugged Generator 3800W',
-    model: 'SPG3800-4-Stroke',
-    price: 215000,
-    category: 'Solar',
-    stockStatus: 'In Stock',
-    description: 'High performance heavy-duty copper-wrapped alternator generator. Reliable manual recoil key with heavy-duty steel safety frame, providing persistent auxiliary home or warehouse operations safety.',
-    heroImage: 'https://images.unsplash.com/photo-1597484211029-4e7c7a9cfa2e?auto=format&fit=crop&w=800&q=80',
     variants: []
   },
   {
@@ -162,30 +209,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 120000,
     category: 'CCTV',
     stockStatus: 'In Stock',
-    description: 'The reference security pack containing 4 weatherproof indoor/outdoor IR bullet cameras, a 4-channel intelligent DVR, 1TB premium security hard disk drive, and full smartphone live-view set.',
+    description: 'Supreme business and home security package containing 4 weatherproof indoor/outdoor IR bullet cameras, a 4-channel intelligent DVR, and a full smartphone live-view remote monitoring system.',
     heroImage: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?auto=format&fit=crop&w=800&q=80',
-    variants: []
-  },
-  {
-    id: 'tp-link-deco-m4',
-    name: 'TP-Link Deco M4 Whole Home Mesh Router',
-    model: 'Deco-M4-3pack',
-    price: 75000,
-    category: 'Networking',
-    stockStatus: 'In Stock',
-    description: 'Three Deco units work seamlessly to blanket your home or office with robust, fast, lag-free Wi-Fi. Automatically steers devices to the fastest router point as you move.',
-    heroImage: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=800&q=80',
-    variants: []
-  },
-  {
-    id: 'kp3-mini-ups',
-    name: 'KP3 Smart Mini DC UPS for Routers',
-    model: 'KP3-10000mAh',
-    price: 28000,
-    category: 'Accessories',
-    stockStatus: 'In Stock',
-    description: 'Never lose internet power when electricity drops. Smart mini UPS keeps your fiber modems, routers, and IP cameras running safely for up to 8 hours. Fully surge protected.',
-    heroImage: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80',
     variants: []
   }
 ];
@@ -193,26 +218,26 @@ export const INITIAL_PRODUCTS: Product[] = [
 export const INITIAL_SHOWROOM_PHOTOS = [
   {
     id: 'photo-1',
-    title: 'MeWe TV Section',
-    description: 'Yellow-branded premium TV display area showcasing wide panels.',
+    title: 'Flagship TV Lounge Display',
+    description: 'Premium Samsung & Hisense TV panels showcasing high fidelity audio visual capabilities.',
     imageUrl: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=800&q=80'
   },
   {
     id: 'photo-2',
-    title: 'Main Showroom Portal',
-    description: 'Showcasing flagship large household appliances, Samsung, and Beko rigs.',
+    title: 'Main Showroom Entryway',
+    description: 'Showcasing the latest double-door smart fridges and domestic air conditioning systems.',
     imageUrl: 'https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&w=800&q=80'
   },
   {
     id: 'photo-3',
-    title: 'Large Appliances Hall',
-    description: 'Heavy duty washing machines, double-door fridges, and gas cookers.',
+    title: 'Home Appliances Showroom',
+    description: 'Heavy duty front-loading washing machines and Scanfrost chest freezer alignments.',
     imageUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80'
   },
   {
     id: 'photo-4',
-    title: 'Cookware Section',
-    description: 'Premium heavy non-stick pots, frypans, and custom aluminum sets.',
+    title: 'Electric & Gas Cookers Hall',
+    description: 'Sleek stainless steel gas hobs, oven components, and tabletop kitchen devices.',
     imageUrl: 'https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&w=800&q=80'
   }
 ];

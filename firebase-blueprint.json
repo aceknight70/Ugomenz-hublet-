@@ -53,6 +53,42 @@
         "themePreset": { "type": "string" },
         "snowAnimationActive": { "type": "boolean" }
       }
+    },
+    "GMQuery": {
+      "title": "GMQuery",
+      "description": "General Manager enquiries submitted by clients",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Reviewed", "Resolved"] }
+      },
+      "required": ["id", "customerName", "whatsappNumber", "subject", "message", "timestamp", "status"]
+    },
+    "Receipt": {
+      "title": "Receipt",
+      "description": "Payment clearance document logs registered by employees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "receiptNo": { "type": "string" },
+        "purpose": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "balance": { "type": "number" },
+        "issuedBy": { "type": "string" },
+        "dateStr": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "bankDetails": { "type": "string" }
+      },
+      "required": ["id", "receiptNo", "purpose", "customerName", "customerPhone", "amount", "description", "paymentMethod", "issuedBy", "dateStr"]
     }
   },
   "firestore": {
@@ -64,9 +100,17 @@
       "schema": "Feedback",
       "description": "Support incident logged by clients"
     },
+    "gm_queries/{queryId}": {
+      "schema": "GMQuery",
+      "description": "General Manager enquiries logged by customers"
+    },
     "settings/{settingId}": {
       "schema": "Setting",
       "description": "Store styles and campaign controls"
+    },
+    "receipts/{receiptId}": {
+      "schema": "Receipt",
+      "description": "Payment clearance receipts logged and retrieved"
     }
   }
 }

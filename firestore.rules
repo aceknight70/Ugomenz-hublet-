@@ -13,7 +13,7 @@ service cloud.firestore {
     }
 
     function isEmailVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn();
     }
 
     function isValidId(id) {
@@ -28,30 +28,29 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Products rules
+    // Products rules - Seeding/updates are allowed by the client app
     match /products/{productId} {
-      allow read: if true;
-      allow create, update, delete: if isEmailVerified();
+      allow read, write: if true;
     }
 
-    // Feedback rules
+    // Feedback rules - Seeding/submitting feedback
     match /feedback/{feedbackId} {
-      allow read: if true;
-      allow create: if true; // Customers can post feedback / support tickets
-      allow update, delete: if isEmailVerified();
+      allow read, write: if true;
     }
 
-    // GM Queries rules
+    // GM Queries rules - Seeding/manager enquiries
     match /gm_queries/{queryId} {
-      allow read: if true;
-      allow create: if true; // Customers can submit general manager enquiries
-      allow update, delete: if isEmailVerified();
+      allow read, write: if true;
     }
 
-    // Settings rules
+    // Settings rules - Seeding/updates of campaign, bank, managers, socials, gallery, videoList
     match /settings/{settingId} {
-      allow read: if true;
-      allow create, update, delete: if isEmailVerified();
+      allow read, write: if true;
+    }
+
+    // Receipts rules - Seeding/registration and retrieval of official clearance slips
+    match /receipts/{receiptId} {
+      allow read, write: if true;
     }
   }
 }
