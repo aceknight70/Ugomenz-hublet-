@@ -1289,7 +1289,8 @@ END:VCARD`;
 
   const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (staffCode === MGR_CODE && staffKey === MGR_KEY && staffPin === DEFAULT_PIN) {
+    const inputVal = staffKey.trim();
+    if (inputVal === 'admin123' || (staffCode === MGR_CODE && staffKey === MGR_KEY && staffPin === DEFAULT_PIN)) {
       try {
         const { signInAnonymously } = await import('firebase/auth');
         await signInAnonymously(auth);
@@ -1304,7 +1305,7 @@ END:VCARD`;
         setStaffError('');
       }
     } else {
-      setStaffError('Incorrect Code, Key, or PIN combination. Try again.');
+      setStaffError('Incorrect admin password. Try admin123');
     }
   };
 
@@ -3726,9 +3727,9 @@ Thank you for choosing UGOMENZ ELECTRONICS!`;
             {!isStaffAuthenticated ? (
               /* Administrative Lock Screen Panel - Page 8 */
               <div className="max-w-md mx-auto bg-[#0F172A] border border-zinc-850 p-6 rounded-2xl space-y-6 shadow-2xl relative">
-                <div className="absolute top-0 right-0 h-1.5 w-1/3 bg-[#E8600A] rounded-tr-2xl"></div>
+                <div className="absolute top-0 right-0 h-1.5 w-1/3 bg-[#1a6fd4] rounded-tr-2xl"></div>
                 <div className="text-center space-y-1.5">
-                  <div className="w-11 h-11 rounded-full bg-zinc-900 mx-auto flex items-center justify-center text-[#E8600A] border border-zinc-805">
+                  <div className="w-11 h-11 rounded-full bg-zinc-900 mx-auto flex items-center justify-center text-[#1a6fd4] border border-zinc-805">
                     <Lock className="w-4.5 h-4.5" />
                   </div>
                   <h3 className="text-base font-syne font-extrabold uppercase text-white">Ugomenz Staff Authorization</h3>
@@ -3737,74 +3738,29 @@ Thank you for choosing UGOMENZ ELECTRONICS!`;
 
                 <form onSubmit={handleStaffLogin} className="space-y-4 text-xs font-semibold">
                   <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Company Manager Code</label>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Admin Password</label>
                     <input
-                      type="text"
+                      type="password"
                       required
-                      placeholder="e.g. UGOMENZ2025"
-                      value={staffCode}
-                      onChange={e => setStaffCode(e.target.value)}
-                      className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
+                      placeholder="Enter admin password (e.g. admin123)"
+                      value={staffKey}
+                      onChange={e => setStaffKey(e.target.value)}
+                      className="w-full bg-[#0A0F1E] border border-zinc-700 hover:border-[#1a6fd4]/40 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#1a6fd4] transition-all font-mono"
                     />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Manager Key</label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="qw123#@"
-                        value={staffKey}
-                        onChange={e => setStaffKey(e.target.value)}
-                        className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Authorization PIN</label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="12345"
-                        value={staffPin}
-                        onChange={e => setStaffPin(e.target.value)}
-                        className="w-full bg-[#0A0F1E] border border-zinc-700 rounded-lg p-2.5 text-xs text-white"
-                      />
-                    </div>
                   </div>
 
                   {staffError && <p className="text-red-400 text-[11px] font-bold text-center">{staffError}</p>}
 
                   <button
                     type="submit"
-                    className="w-full py-3.5 px-4 bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl shadow-lg transition-all cursor-pointer"
+                    className="w-full py-3.5 px-4 bg-[#1a6fd4] hover:bg-[#2b85e4] text-white text-xs font-syne uppercase tracking-wider font-extrabold rounded-xl shadow-lg transition-all cursor-pointer"
                   >
-                    Authenticate credentials
+                    Authenticate Admin
                   </button>
                 </form>
 
-                <div className="flex items-center gap-2">
-                  <div className="h-px bg-zinc-850 flex-1"></div>
-                  <span className="text-[9px] text-zinc-500 uppercase font-black">OR</span>
-                  <div className="h-px bg-zinc-850 flex-1"></div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleGoogleSignIn}
-                  className="w-full py-3 px-4 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                  </svg>
-                  Sign in with Google
-                </button>
-
                 <p className="text-zinc-500 text-[10px] text-center italic border-t border-zinc-800/80 pt-3">
-                  Default: Code: <span className="font-mono text-zinc-400">UGOMENZ2025</span> / Key: <span className="font-mono text-zinc-400">qw123#@</span> / PIN: <span className="font-mono text-zinc-400">12345</span>
+                  Default Manager Password: <span className="font-mono text-zinc-400">admin123</span>
                 </p>
               </div>
             ) : (
