@@ -5,7 +5,7 @@ import {
   MessageCircle, CheckCircle, Calendar, DollarSign, Lock, MapPin,
   Clock, ArrowRight, Copy, Plus, Trash2, ThumbsUp, Check, Loader2, ArrowUpRight,
   QrCode, BarChart2, Sliders, Heart, Pin, Maximize2, ChevronLeft, ChevronRight, X,
-  Tv, Snowflake, Flame, RotateCw, Eye, Sun, Layers, ZoomIn, ZoomOut, Wind
+  Tv, Snowflake, Flame, RotateCw, Eye, Sun, Moon, Layers, ZoomIn, ZoomOut, Wind
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
@@ -54,6 +54,17 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<string>(() => {
     return localStorage.getItem('ug_last_tab') || 'gallery';
   });
+  const [isLightMode, setIsLightMode] = useState<boolean>(() => {
+    return localStorage.getItem('ug_light_mode') === 'true';
+  });
+
+  const toggleLightMode = () => {
+    setIsLightMode(prev => {
+      const next = !prev;
+      localStorage.setItem('ug_light_mode', String(next));
+      return next;
+    });
+  };
 
   const [urlReceiptId, setUrlReceiptId] = useState<string | null>(() => {
     // Look up in hash, pathname, or search query parameters
@@ -1738,7 +1749,7 @@ END:VCARD`;
   // MAIN CORE APPLICATION (Tabs)
   // ----------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#0A0F1E] text-white flex flex-col relative pb-28 md:pb-32 font-sans select-text">
+    <div className={`min-h-screen ${isLightMode ? 'light-mode bg-white text-zinc-900' : 'bg-[#0A0F1E] text-white'} flex flex-col relative pb-28 md:pb-32 font-sans select-text`}>
       {/* Dynamic Theme Styles Override */}
       <style>{`
         :root {
@@ -1765,6 +1776,139 @@ END:VCARD`;
         .shadow-\[\#E8600A\]\/20 { --tw-shadow: 0 4px 6px -1px ${campaign.accentColor}33, 0 2px 4px -1px ${campaign.accentColor}33 !important; }
         .shadow-\[\#E8600A\]\/35 { --tw-shadow: 0 10px 15px -3px ${campaign.accentColor}59, 0 4px 6px -2px ${campaign.accentColor}59 !important; }
         
+        /* Special Light Mode overrides */
+        .light-mode {
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+        }
+        .light-mode main {
+          color: #0f172a !important;
+        }
+        /* Exclude headers, active primary badges/buttons from dark-text conversion */
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-white,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-zinc-100,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-zinc-50,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-slate-100 {
+          color: #0d1527 !important;
+        }
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-zinc-200,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-slate-200 {
+          color: #111827 !important;
+        }
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-zinc-300,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-zinc-400,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-slate-300,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-slate-400 {
+          color: #1e293b !important; /* Premium dark slate for supreme readability */
+        }
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-zinc-500,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-slate-500 {
+          color: #334155 !important; /* Clear slate gray */
+        }
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-zinc-650,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-zinc-550,
+        .light-mode :not(header):not(header *):not(.bg-\[\#1a6fd4\]):not(.bg-blue-600):not(.bg-blue-600 *):not(button.bg-\[\#1a6fd4\] *) .text-zinc-505 {
+          color: #475569 !important;
+        }
+
+        /* Adjust colored text classes for light mode to maintain contrast */
+        .light-mode .text-red-400, .light-mode .text-red-300 { color: #dc2626 !important; }
+        .light-mode .text-green-400, .light-mode .text-green-300, .light-mode .text-emerald-400 { color: #16a34a !important; }
+        .light-mode .text-amber-400, .light-mode .text-amber-300, .light-mode .text-yellow-400 { color: #ca8a04 !important; }
+        .light-mode .text-blue-400, .light-mode .text-blue-300 { color: #2563eb !important; }
+
+        /* Container backgrounds - mapped to premium soft light panels */
+        .light-mode :not(header):not(header *) .bg-\[\#0A0F1E\],
+        .light-mode :not(header):not(header *) .bg-\[\#060B18\],
+        .light-mode :not(header):not(header *) .bg-\[\#0a0e1a\],
+        .light-mode :not(header):not(header *) .bg-zinc-950,
+        .light-mode :not(header):not(header *) .bg-slate-950,
+        .light-mode :not(header):not(header *) .bg-black,
+        .light-mode :not(header):not(header *) .bg-zinc-900\/50,
+        .light-mode :not(header):not(header *) .bg-zinc-950\/80 {
+          background-color: #f8fafc !important; /* Off-white canvas */
+          color: #0f172a !important;
+        }
+        .light-mode :not(header):not(header *) .bg-\[\#0F172A\],
+        .light-mode :not(header):not(header *) .bg-\[\#050B18\],
+        .light-mode :not(header):not(header *) .bg-zinc-900,
+        .light-mode :not(header):not(header *) .bg-slate-900,
+        .light-mode :not(header):not(header *) .bg-zinc-800,
+        .light-mode :not(header):not(header *) .bg-neutral-900,
+        .light-mode :not(header):not(header *) .bg-neutral-950,
+        .light-mode :not(header):not(header *) .bg-zinc-950\/30,
+        .light-mode :not(header):not(header *) .bg-zinc-900\/80,
+        .light-mode :not(header):not(header *) .bg-zinc-900\/40,
+        .light-mode :not(header):not(header *) .bg-zinc-950\/50,
+        .light-mode :not(header):not(header *) .bg-zinc-950\/60,
+        .light-mode :not(header):not(header *) .bg-black\/40 {
+          background-color: #ffffff !important; /* Pure white crisp panels */
+          color: #0f172a !important;
+        }
+
+        /* Border adjustments */
+        .light-mode :not(header):not(header *) .border-zinc-800,
+        .light-mode :not(header):not(header *) .border-zinc-850,
+        .light-mode :not(header):not(header *) .border-zinc-900,
+        .light-mode :not(header):not(header *) .border-zinc-750,
+        .light-mode :not(header):not(header *) .border-zinc-700,
+        .light-mode :not(header):not(header *) .border-zinc-600,
+        .light-mode :not(header):not(header *) .border-slate-800,
+        .light-mode :not(header):not(header *) .border-zinc-800\/80,
+        .light-mode :not(header):not(header *) .border-white\/10,
+        .light-mode :not(header):not(header *) .border-white\/5 {
+          border-color: #cbd5e1 !important; /* Nice polished border */
+        }
+
+        /* Form elements */
+        .light-mode input,
+        .light-mode select,
+        .light-mode textarea {
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+          border: 1px solid #94a3b8 !important;
+        }
+        .light-mode input:focus,
+        .light-mode select:focus,
+        .light-mode textarea:focus {
+          border-color: #1a6fd4 !important;
+          outline: none;
+        }
+        .light-mode input::placeholder,
+        .light-mode textarea::placeholder {
+          color: #64748b !important;
+        }
+
+        /* Bottom Nav and dynamic elements */
+        .light-mode nav {
+          background-color: #f1f5f9 !important;
+          border-top-color: #cbd5e1 !important;
+        }
+        .light-mode nav span, .light-mode nav button {
+          color: #334155 !important;
+        }
+        .light-mode nav button.bg-[#E8600A], .light-mode nav button.bg-\[\#E8600A\] {
+          background-color: ${campaign.accentColor} !important;
+          color: #ffffff !important;
+        }
+        .light-mode nav .from-\[\#050B18\] {
+          --tw-gradient-from: #f1f5f9 !important;
+        }
+
+        /* Miscellaneous */
+        .light-mode hr {
+          border-color: #cbd5e1 !important;
+        }
+        .light-mode .text-zinc-500 {
+          color: #475569 !important;
+        }
+        .light-mode .shadow-2xl {
+          box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.1), 0 8px 10px -6px rgb(15 23 42 / 0.1) !important;
+        }
+        .light-mode .shadow-xl {
+          box-shadow: 0 20px 25px -5px rgb(15 23 42 / 0.05), 0 8px 10px -6px rgb(15 23 42 / 0.05) !important;
+        }
+
         @keyframes marquee {
           0% { transform: translate3d(0, 0, 0); }
           100% { transform: translate3d(-33.333%, 0, 0); }
@@ -1872,35 +2016,27 @@ END:VCARD`;
               <Clock className="w-3.5 h-3.5 text-[#E8600A]" />
               Open 8AM - 6PM
             </span>
+            <span className="h-4 w-px bg-zinc-700 hidden sm:inline"></span>
+            <button
+              onClick={toggleLightMode}
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer font-bold uppercase text-[10px] tracking-wider"
+              title="Toggle Light/Dark Mode"
+            >
+              {isLightMode ? (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                  Dark Mode
+                </>
+              ) : (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-yellow-400" />
+                  Light Mode
+                </>
+              )}
+            </button>
           </div>
         </div>
       </header>
-
-      {/* Hero promo banner shown on top of Gallery & Showroom */}
-      {campaign.campaignActive && (currentTab === 'showroom' || currentTab === 'gallery') && (
-        <div className="max-w-7xl mx-auto w-full px-4 pt-6">
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#003087] via-[#05143a] to-[#0A0F1E] border border-zinc-800 p-6 md:p-8 flex flex-col justify-center items-start shadow-xl">
-            <div className="absolute right-0 top-0 w-1/2 h-full opacity-10 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500 to-transparent"></div>
-            <span className="bg-[#E8600A] text-white text-[10px] font-syne tracking-widest uppercase px-3 py-1 rounded-full font-bold mb-3">
-              {campaign.campaignTag}
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-syne font-black tracking-tight mb-2 uppercase">
-              {campaign.headline}
-            </h2>
-            <p className="text-zinc-300 text-sm max-w-2xl mb-4 leading-relaxed">
-              {campaign.subHeadline}
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setCurrentTab('infoDesk')}
-                className="bg-transparent hover:bg-white/10 text-white border border-white/20 text-xs font-syne font-bold uppercase tracking-wider px-4 py-2.5 rounded-lg transition-all"
-              >
-                Inquire via AI Desk
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Primary content router */}
       <main className="flex-grow max-w-7xl mx-auto w-full p-4">
