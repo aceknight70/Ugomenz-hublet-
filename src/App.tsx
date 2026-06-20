@@ -5,7 +5,7 @@ import {
   MessageCircle, CheckCircle, Calendar, DollarSign, Lock, MapPin,
   Clock, ArrowRight, Copy, Plus, Trash2, ThumbsUp, Check, Loader2, ArrowUpRight, Edit,
   QrCode, BarChart2, Sliders, Heart, Pin, Maximize2, ChevronLeft, ChevronRight, X,
-  Tv, Snowflake, Flame, RotateCw, Eye, Sun, Moon, Layers, ZoomIn, ZoomOut, Wind
+  Tv, Snowflake, Flame, RotateCw, Eye, Sun, Moon, Layers, ZoomIn, ZoomOut, Wind, Sparkles
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
@@ -14,9 +14,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
-import { Product, Variant, BankDetails, Review, GMQuery, ManagerStatus, AnalyticsData, CampaignConfig } from './types';
+import { Product, Variant, BankDetails, Review, GMQuery, ManagerStatus, AnalyticsData, CampaignConfig, getProductBrand } from './types';
 import { INITIAL_PRODUCTS, INITIAL_SHOWROOM_PHOTOS } from './initialData';
 import StaffWorkshopSuite from './components/StaffWorkshopSuite';
+import BruhmShowroom from './components/BruhmShowroom';
 import { auth, db, googleProvider, OperationType, handleFirestoreError } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -52,7 +53,7 @@ export default function App() {
   });
   const [animationCompleted, setAnimationCompleted] = useState<boolean>(false);
   const [currentTab, setCurrentTab] = useState<string>(() => {
-    return localStorage.getItem('ug_last_tab') || 'gallery';
+    return localStorage.getItem('ug_last_tab') || 'showroom';
   });
   const [isLightMode, setIsLightMode] = useState<boolean>(() => {
     return localStorage.getItem('ug_light_mode') === 'true';
@@ -111,6 +112,18 @@ export default function App() {
       setUrlReceiptData(null);
     }
   }, [urlReceiptId]);
+
+  useEffect(() => {
+    if (isLightMode) {
+      document.body.classList.add('light-mode');
+      document.body.style.backgroundColor = '#ffffff';
+      document.body.style.color = '#0f172a';
+    } else {
+      document.body.classList.remove('light-mode');
+      document.body.style.backgroundColor = '#0A0F1E';
+      document.body.style.color = '#FFFFFF';
+    }
+  }, [isLightMode]);
 
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('ug_products_list');
@@ -579,6 +592,37 @@ END:VCARD`;
     }
   }, [currentTab, hasEntered]);
 
+  // Synchronize Google Sheets and custom route selectors
+  useEffect(() => {
+    const handleUrlRouteSync = () => {
+      const params = new URLSearchParams(window.location.search);
+      const pageParam = params.get('tab') || params.get('page') || params.get('route');
+      if (pageParam === 'bruhm-showroom' || pageParam === 'showroom' || pageParam === 'bruhmShowroom') {
+        setCurrentTab('bruhmShowroom');
+      }
+
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (
+        path.includes('/showroom') || 
+        path.includes('/bruhm-showroom') ||
+        hash.includes('/showroom') || 
+        hash.includes('/bruhm-showroom') || 
+        hash.includes('#showroom') || 
+        hash.includes('#bruhm-showroom')
+      ) {
+        setCurrentTab('bruhmShowroom');
+      }
+    };
+    handleUrlRouteSync();
+    window.addEventListener('hashchange', handleUrlRouteSync);
+    window.addEventListener('popstate', handleUrlRouteSync);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlRouteSync);
+      window.removeEventListener('popstate', handleUrlRouteSync);
+    };
+  }, []);
+
 
   // ----------------------------------------------------
   // UTILITIES & WA LINK GENERATOR (Page 10)
@@ -593,28 +637,38 @@ END:VCARD`;
   // ACTIVE GALLERY VIEW (Room 1)
   // ----------------------------------------------------
   const [activeGalleryCategory, setActiveGalleryCategory] = useState<string>('All');
+  const [activeGalleryBrandCategory, setActiveGalleryBrandCategory] = useState<string>('All');
   const [selectedGalleryProductId, setSelectedGalleryProductId] = useState<string>(products[0]?.id || '');
   const selectedGalleryProduct = useMemo(() => {
     return products.find(p => p.id === selectedGalleryProductId) || products[0];
   }, [products, selectedGalleryProductId]);
 
   const filteredGalleryProducts = useMemo(() => {
-    if (activeGalleryCategory === 'All') return products;
-    return products.filter(p => p.category === activeGalleryCategory);
-  }, [products, activeGalleryCategory]);
+    return products.filter(p => {
+      const matchCategory = activeGalleryCategory === 'All' || p.category === activeGalleryCategory;
+      const matchBrand = activeGalleryBrandCategory === 'All' || getProductBrand(p) === activeGalleryBrandCategory;
+      return matchCategory && matchBrand;
+    });
+  }, [products, activeGalleryCategory, activeGalleryBrandCategory]);
 
-  // Synchronise selected product when category changes in gallery tab
+  // Synchronise selected product when category or brand changes in gallery tab
   useEffect(() => {
-    if (activeGalleryCategory !== 'All' && selectedGalleryProduct) {
-      if (selectedGalleryProduct.category !== activeGalleryCategory) {
-        const matching = products.filter(p => p.category === activeGalleryCategory);
+    if (selectedGalleryProduct) {
+      const isMatchingCat = activeGalleryCategory === 'All' || selectedGalleryProduct.category === activeGalleryCategory;
+      const isMatchingBrand = activeGalleryBrandCategory === 'All' || getProductBrand(selectedGalleryProduct) === activeGalleryBrandCategory;
+      if (!isMatchingCat || !isMatchingBrand) {
+        const matching = products.filter(p => {
+          const matchCategory = activeGalleryCategory === 'All' || p.category === activeGalleryCategory;
+          const matchBrand = activeGalleryBrandCategory === 'All' || getProductBrand(p) === activeGalleryBrandCategory;
+          return matchCategory && matchBrand;
+        });
         if (matching.length > 0) {
           setSelectedGalleryProductId(matching[0].id);
           setActiveGalleryColorIdx(-1);
         }
       }
     }
-  }, [activeGalleryCategory, products, selectedGalleryProduct]);
+  }, [activeGalleryCategory, activeGalleryBrandCategory, products, selectedGalleryProduct]);
 
   // Gallery Sub-states
   const [activeGalleryColorIdx, setActiveGalleryColorIdx] = useState<number>(-1); // -1 is base product
@@ -704,6 +758,9 @@ END:VCARD`;
   const [activeCategoryFilter, setActiveCategoryFilter] = useState(() => {
     return localStorage.getItem('ug_showroom_category') || 'All';
   });
+  const [activeBrandFilter, setActiveBrandFilter] = useState(() => {
+    return localStorage.getItem('ug_showroom_brand') || 'All';
+  });
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
   // Pinterest Board, Pinning, and Fullscreen lightbox states
@@ -730,17 +787,23 @@ END:VCARD`;
     localStorage.setItem('ug_showroom_category', activeCategoryFilter);
   }, [activeCategoryFilter]);
 
+  useEffect(() => {
+    localStorage.setItem('ug_showroom_brand', activeBrandFilter);
+  }, [activeBrandFilter]);
+
   const categories = ['All', 'Televisions', 'Refrigerators', 'Washing Machines', 'Air Conditioners', 'Kitchen Appliances', 'Solar', 'CCTV'];
+  const brandsList = ['All', 'Samsung', 'Hisense', 'Bruhm', 'Scanfrost', 'LG', 'Panasonic', 'Prag', 'Jinko', 'Felicity', 'Hikvision', 'Others'];
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchCategory = activeCategoryFilter === 'All' || p.category.toLowerCase() === activeCategoryFilter.toLowerCase();
+      const matchBrand = activeBrandFilter === 'All' || getProductBrand(p).toLowerCase() === activeBrandFilter.toLowerCase();
       const matchQuery = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          (p.model && p.model.toLowerCase().includes(searchQuery.toLowerCase())) ||
                          p.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchCategory && matchQuery;
+      return matchCategory && matchBrand && matchQuery;
     });
-  }, [products, activeCategoryFilter, searchQuery]);
+  }, [products, activeCategoryFilter, activeBrandFilter, searchQuery]);
 
   // ----------------------------------------------------
   // CLIENT AI DESK (Room 4)
@@ -1489,20 +1552,20 @@ END:VCARD`;
   // ----------------------------------------------------
   if (!hasEntered) {
     return (
-      <div id="landing-screen" className="min-h-screen bg-[#060B18] flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden select-none">
+      <div id="landing-screen" className={`min-h-screen ${isLightMode ? 'light-mode bg-[#F8FAFC]' : 'bg-[#060B18]'} flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden select-none transition-colors duration-300`}>
         {/* Dynamic backdrop gradient spots & Grid Overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(0,48,135,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(0,48,135,0.06)_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+        <div className={`absolute inset-0 bg-[linear-gradient(${isLightMode ? 'rgba(0,48,135,0.03)' : 'rgba(0,48,135,0.06)'}_1px,transparent_1px),linear-gradient(90deg,${isLightMode ? 'rgba(0,48,135,0.03)' : 'rgba(0,48,135,0.06)'}_1px,transparent_1px)] bg-[size:40px_40px]`}></div>
         
         {/* Moving glowing orbits simulation (Background) */}
-        <div className="absolute top-1/4 left-1/4 w-[16rem] sm:w-[24rem] h-[16rem] sm:h-[24rem] rounded-full bg-[#003087]/15 filter blur-[90px] animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-[18rem] sm:w-[26rem] h-[18rem] sm:h-[26rem] rounded-full bg-[#E8600A]/12 filter blur-[110px] animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+        <div className={`absolute top-1/4 left-1/4 w-[16rem] sm:w-[24rem] h-[16rem] sm:h-[24rem] rounded-full ${isLightMode ? 'bg-[#003087]/5' : 'bg-[#003087]/15'} filter blur-[90px] animate-pulse`}></div>
+        <div className={`absolute bottom-1/4 right-1/4 w-[18rem] sm:w-[26rem] h-[18rem] sm:h-[26rem] rounded-full ${isLightMode ? 'bg-[#E8600A]/4' : 'bg-[#E8600A]/12'} filter blur-[110px] animate-pulse`} style={{ animationDelay: '1.5s' }}></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] h-[30rem] rounded-full bg-indigo-500/[0.03] filter blur-[140px]"></div>
-
+        
         {/* Outer subtle decorative frame */}
-        <div className="absolute inset-4 border border-white/[0.02] rounded-[2.5rem] pointer-events-none z-0"></div>
+        <div className={`absolute inset-4 ${isLightMode ? 'border-zinc-200/50' : 'border-white/[0.02]'} border rounded-[2.5rem] pointer-events-none z-0`}></div>
 
         {/* MAIN MATTE GLASSMORPHISM CONTAINER */}
-        <div className="z-10 w-full max-w-lg bg-zinc-950/40 backdrop-blur-3xl border border-white/[0.08] rounded-3xl p-6 sm:p-10 shadow-[0_30px_70px_rgba(0,0,0,0.6)] flex flex-col items-center gap-6 relative overflow-hidden transition-all duration-500 hover:border-white/[0.12]">
+        <div className={`z-10 w-full max-w-lg ${isLightMode ? 'bg-white/80 border-zinc-200/80 shadow-[0_20px_50px_rgba(15,23,42,0.06)]' : 'bg-zinc-950/40 border-white/[0.08] shadow-[0_30px_70px_rgba(0,0,0,0.6)]'} backdrop-blur-3xl border rounded-3xl p-6 sm:p-10 flex flex-col items-center gap-6 relative overflow-hidden transition-all duration-500`}>
           
           {/* Accent decoration line */}
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#E8600A] to-transparent"></div>
@@ -1512,7 +1575,7 @@ END:VCARD`;
             <p className="text-[#E8600A] text-[10px] sm:text-xs tracking-[0.3em] font-syne font-black uppercase text-center">
               Ugomenz Hublet &bull; v2.1
             </p>
-            <p className="text-zinc-500 text-[9px] sm:text-[10px] tracking-wider uppercase font-mono">
+            <p className={`${isLightMode ? 'text-zinc-600' : 'text-zinc-500'} text-[9px] sm:text-[10px] tracking-wider uppercase font-mono`}>
               ESGMC &bull; Fortune Akioya (FATAP-CT)
             </p>
           </div>
@@ -1521,7 +1584,7 @@ END:VCARD`;
           <div className="relative w-36 sm:w-44 h-36 sm:h-44 flex items-center justify-center my-2 group">
             {/* Pulsating outer laser/glowing ring decor */}
             <div className="absolute inset-0 rounded-full border border-[#E8600A]/20 scale-105 animate-pulse"></div>
-            <div className="absolute inset-3 rounded-full border border-dashed border-zinc-800/60 animate-[spin_40s_linear_infinite]"></div>
+            <div className={`absolute inset-3 rounded-full border border-dashed ${isLightMode ? 'border-zinc-300' : 'border-zinc-800/60'} animate-[spin_40s_linear_infinite]`}></div>
             
             {/* SVG custom letter 'U' stroke draw */}
             <svg className="w-32 h-32 sm:w-40 sm:h-40 stroke-[#E8600A] fill-none stroke-[7] animate-uGlow relative z-10" viewBox="0 0 100 100">
@@ -1534,7 +1597,7 @@ END:VCARD`;
             
             {/* GOMENZ lettering aligned inside the U-curve */}
             <div className="absolute top-[38%] left-1/2 transform -translate-x-1/2 mt-4 z-20">
-              <span className="text-white text-2xl sm:text-3xl font-syne tracking-[0.15em] uppercase font-black animate-fadeUp opacity-0 select-none pointer-events-none drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]" style={{ animationDelay: '1.2s' }}>
+              <span className={`${isLightMode ? 'text-zinc-900' : 'text-white'} text-2xl sm:text-3xl font-syne tracking-[0.15em] uppercase font-black animate-fadeUp opacity-0 select-none pointer-events-none drop-shadow-[0_2px_10px_rgba(0,0,0,0.2)]`} style={{ animationDelay: '1.2s' }}>
                 GOMENZ
               </span>
             </div>
@@ -1542,38 +1605,38 @@ END:VCARD`;
 
           {/* Branding Texts */}
           <div className="animate-fadeUp opacity-0 space-y-2 text-center w-full" style={{ animationDelay: '1.6s' }}>
-            <h1 className="text-2xl sm:text-3.5xl text-white font-syne tracking-tight font-black uppercase">
+            <h1 className={`text-2xl sm:text-3.5xl ${isLightMode ? 'text-zinc-900' : 'text-white'} font-syne tracking-tight font-black uppercase`}>
               UGOMENZ MALL
             </h1>
             <div className="flex items-center justify-center gap-3">
-              <span className="h-px w-10 bg-zinc-800"></span>
+              <span className={`h-px w-10 ${isLightMode ? 'bg-zinc-200' : 'bg-zinc-800'}`}></span>
               <span className="text-[#E8600A] font-syne text-[10px] sm:text-xs uppercase tracking-[0.2em] font-extrabold">
                 Electro Point
               </span>
-              <span className="h-px w-10 bg-zinc-800"></span>
+              <span className={`h-px w-10 ${isLightMode ? 'bg-zinc-200' : 'bg-zinc-800'}`}></span>
             </div>
-            <p className="text-zinc-400 text-xs sm:text-sm tracking-wider font-medium">
+            <p className={`${isLightMode ? 'text-zinc-600' : 'text-zinc-400'} text-xs sm:text-sm tracking-wider font-medium`}>
               Premium Electronics &bull; Deco Road, Warri
             </p>
           </div>
 
           {/* Showcase Building Exterior Panel */}
-          <div className="w-full h-28 sm:h-32 rounded-2xl border border-zinc-800/80 bg-[#0c1428] relative overflow-hidden flex items-end p-3 animate-scaleIn opacity-0 shadow-xl group/building" style={{ animationDelay: '1.4s' }}>
+          <div className={`w-full h-28 sm:h-32 rounded-2xl border ${isLightMode ? 'border-zinc-200 bg-white' : 'border-zinc-800/80 bg-[#0c1428]'} relative overflow-hidden flex items-end p-3 animate-scaleIn opacity-0 shadow-xl group/building`} style={{ animationDelay: '1.4s' }}>
             <img
               src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=600&q=80"
               alt="Ugomenz Showroom Exterior"
               className="absolute inset-0 w-full h-full object-cover opacity-45 grayscale-[20%] transition-transform duration-700 ease-out group-hover/building:scale-105"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/30 to-transparent"></div>
+            <div className={`absolute inset-0 bg-gradient-to-t ${isLightMode ? 'from-white via-white/40 to-transparent' : 'from-zinc-950 via-zinc-950/30 to-transparent'}`}></div>
             
             <div className="relative z-10 w-full flex justify-between items-end">
               <div>
                 <p className="text-[9px] text-[#E8600A] font-extrabold tracking-widest uppercase">Deco Road Plaza</p>
-                <p className="text-xs text-white font-bold font-syne uppercase">Ugomenz Showroom</p>
+                <p className={`text-xs ${isLightMode ? 'text-zinc-900' : 'text-white'} font-bold font-syne uppercase`}>Ugomenz Showroom</p>
               </div>
               <div className="flex gap-1 flex-wrap justify-end max-w-[65%]">
                 {['Brühm', 'Sharp', 'Tamashi', 'Beko'].map(tag => (
-                  <span key={tag} className="text-[8px] bg-[#003087]/65 text-zinc-100 border border-white/[0.08] px-2 py-0.5 rounded font-extrabold tracking-tight">
+                  <span key={tag} className={`text-[8px] ${isLightMode ? 'bg-[#003087]/15 text-[#003087] border-[#003087]/20' : 'bg-[#003087]/65 text-zinc-100 border-white/[0.08]'} border px-2 py-0.5 rounded font-extrabold tracking-tight`}>
                     {tag}
                   </span>
                 ))}
@@ -2067,9 +2130,16 @@ END:VCARD`;
 
       {/* Primary content router */}
       <main className="flex-grow max-w-7xl mx-auto w-full p-4">
-        {/* ROOM 1: GALLERY */}
-        {currentTab === 'gallery' && (
-          <div id="room-gallery" className="space-y-6 animate-scaleIn">
+        {/* ROOM 1-B: BRUHM SHOWROOM */}
+        {currentTab === 'bruhmShowroom' && (
+          <div id="room-bruhm-showroom" className="space-y-6 animate-scaleIn">
+            <BruhmShowroom isLightMode={isLightMode} />
+          </div>
+        )}
+
+        {/* ROOM 1: SHOWROOM */}
+        {currentTab === 'showroom' && (
+          <div id="room-showroom" className="space-y-6 animate-scaleIn">
             {/* Unique & Fantastic Category Navigation Block */}
             <div className="bg-[#0F172A] p-6 rounded-2xl border border-zinc-800 space-y-6 shadow-xl relative overflow-hidden">
               <div className="absolute top-0 right-0 h-1.5 w-1/4 bg-[#E8600A] rounded-tr-2xl"></div>
@@ -2113,6 +2183,32 @@ END:VCARD`;
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Brand Category Filter Row */}
+              <div className="space-y-2 pt-1 pb-2.5 border-b border-zinc-800/60 text-left">
+                <div className="text-[9px] uppercase font-bold text-zinc-500 tracking-wider">
+                  Brand Category Filter
+                </div>
+                <div className="flex gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+                  {brandsList.map((brand) => {
+                    const isBrandActive = activeGalleryBrandCategory === brand;
+                    return (
+                      <button
+                        key={`gal-brand-${brand}`}
+                        type="button"
+                        onClick={() => setActiveGalleryBrandCategory(brand)}
+                        className={`px-3.5 py-1.5 rounded-xl border text-[10px] sm:text-xs font-syne font-extrabold uppercase shrink-0 transition-all flex items-center justify-center cursor-pointer ${
+                          isBrandActive
+                            ? 'bg-[#1a6fd4] border-[#1a6fd4] text-white shadow shadow-[#1a6fd4]/10'
+                            : 'bg-[#050B18] border-zinc-850 text-zinc-400 hover:text-white hover:border-zinc-800'
+                        }`}
+                      >
+                        {brand}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Horizontal Scrollable Product Slider */}
@@ -2471,20 +2567,35 @@ END:VCARD`;
           );
         })()}
 
-        {/* ROOM 3: SHOWROOM */}
-        {currentTab === 'showroom' && (
-          <div id="room-[#showroom]" className="space-y-6 animate-scaleIn">
+        {/* ROOM 3: GALLERY */}
+        {currentTab === 'gallery' && (
+          <div id="room-[#gallery]" className="space-y-6 animate-scaleIn">
             <div className="space-y-4">
               {/* Category Filter Bar */}
-              <div className="sticky top-16 z-30 bg-[#0A0F1E] py-2">
+              <div className="sticky top-16 z-30 bg-[#0A0F1E] py-2 space-y-2.5">
                 <div className="flex gap-2 overflow-x-auto no-scrollbar scroll-smooth pb-1 border-b border-zinc-800/80">
                   {categories.map((cat) => (
                     <button
                       key={cat}
+                      type="button"
                       onClick={() => setActiveCategoryFilter(cat)}
-                      className={`px-4 py-2 text-xs font-syne font-extrabold uppercase tracking-widest rounded-full border shrink-0 transition-all ${activeCategoryFilter === cat ? 'bg-[#E8600A] border-[#E8600A] text-white' : 'border-[#003087] text-zinc-400 hover:text-white hover:border-zinc-700'}`}
+                      className={`px-4 py-2 text-xs font-syne font-extrabold uppercase tracking-widest rounded-full border shrink-0 transition-all cursor-pointer ${activeCategoryFilter === cat ? 'bg-[#E8600A] border-[#E8600A] text-white' : 'border-[#003087] text-zinc-400 hover:text-white hover:border-zinc-700'}`}
                     >
                       {cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Brand Filter Row */}
+                <div className="flex gap-2 overflow-x-auto no-scrollbar scroll-smooth pb-1 border-b border-zinc-800/40">
+                  {brandsList.map((brand) => (
+                    <button
+                      key={`showroom-brand-${brand}`}
+                      type="button"
+                      onClick={() => setActiveBrandFilter(brand)}
+                      className={`px-3.5 py-1.5 text-[10px] uppercase font-syne font-extrabold rounded-xl border shrink-0 transition-all cursor-pointer ${activeBrandFilter === brand ? 'bg-[#1a6fd4] border-[#1a6fd4] text-white shadow shadow-[#1a6fd4]/20' : 'bg-[#050B18] border-zinc-850 text-zinc-400 hover:text-white hover:border-zinc-750'}`}
+                    >
+                      {brand}
                     </button>
                   ))}
                 </div>
@@ -2625,7 +2736,7 @@ END:VCARD`;
                 <div>
                   <h4 className="text-sm font-syne uppercase font-bold tracking-widest text-[#E8600A] flex items-center gap-2">
                     <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#E8600A] animate-pulse"></span>
-                    Showroom Hub Walkthrough Pins
+                    Gallery Hub Walkthrough Pins
                   </h4>
                   <p className="text-xs text-zinc-400">Actual high-definition walkthrough photographs from Ugomenz Deco Road Mall, Warri.</p>
                 </div>
@@ -2904,11 +3015,11 @@ END:VCARD`;
                           <button
                             onClick={() => {
                               setSelectedGalleryProductId(p.id);
-                              setCurrentTab('gallery');
+                              setCurrentTab('showroom');
                             }}
                             className="bg-zinc-800 hover:bg-[#003087] text-white px-2.5 py-1 rounded text-[10px] font-syne uppercase font-extrabold transition-all"
                           >
-                            View Gallery
+                            View Showroom
                           </button>
                         </td>
                       </tr>
@@ -3998,6 +4109,8 @@ Thank you for choosing UGOMENZ ELECTRONICS!`;
                 categories={categories}
                 analytics={analytics}
                 setAnalytics={setAnalytics}
+                showroomPhotos={showroomPhotos}
+                setShowroomPhotos={setShowroomPhotos}
               />
             )}
           </div>
@@ -4005,16 +4118,17 @@ Thank you for choosing UGOMENZ ELECTRONICS!`;
       </main>
 
       {/* FIXED SCROLLABLE BOTTOM TABS NAV (13 TABS) - Page 3 */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-[#050B18] border-t border-zinc-800/80 p-1.5 sm:p-2 z-40 shadow-2xl">
+      <nav className={`fixed bottom-0 left-0 right-0 ${isLightMode ? 'bg-white border-t border-slate-200' : 'bg-[#050B18] border-t border-zinc-800/80'} p-1.5 sm:p-2 z-40 shadow-2xl transition-colors duration-300`}>
         <div className="max-w-7xl mx-auto relative">
           {/* Scroll fade modifiers */}
-          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#050B18] to-transparent pointer-events-none z-10"></div>
+          <div className={`absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l ${isLightMode ? 'from-white' : 'from-[#050B18]'} to-transparent pointer-events-none z-10`}></div>
 
           <div className="flex gap-1 overflow-x-auto no-scrollbar scroll-smooth pl-2 pr-8 py-0.5 justify-start md:justify-between">
             {[
-              { id: 'gallery', label: 'Gallery', icon: ImageIcon },
-              { id: 'videos', label: 'Videos', icon: PlayCircle },
               { id: 'showroom', label: 'Showroom', icon: Store },
+              { id: 'bruhmShowroom', label: 'Bruhm Showroom', icon: Sparkles },
+              { id: 'videos', label: 'Videos', icon: PlayCircle },
+              { id: 'gallery', label: 'Gallery', icon: ImageIcon },
               { id: 'infoDesk', label: 'AI Desk', icon: Bot },
               { id: 'channel', label: 'Channel', icon: Share2 },
               { id: 'livesheet', label: 'Live Sheet', icon: FileText },
@@ -4221,7 +4335,7 @@ Thank you for choosing UGOMENZ ELECTRONICS!`;
                   className="py-3 px-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-xs font-syne font-bold uppercase rounded-xl tracking-wider flex items-center justify-center gap-1.5 transition-all"
                 >
                   <Search className="w-4 h-4" />
-                  Show Showroom Filter
+                  Show Gallery Filter
                 </button>
 
                 <a
@@ -4471,6 +4585,18 @@ Thank you for choosing UGOMENZ ELECTRONICS!`;
                   >
                     <option value="In Stock">In Stock</option>
                     <option value="Out of Stock">Out of Stock</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-zinc-500 block mb-1">Brand Category</label>
+                  <select
+                    value={editingProduct.brand || getProductBrand(editingProduct)}
+                    onChange={e => setEditingProduct(prev => prev ? { ...prev, brand: e.target.value } : null)}
+                    className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white cursor-pointer focus:border-[#E8600A] focus:outline-none"
+                  >
+                    {['Samsung', 'Hisense', 'Bruhm', 'Scanfrost', 'LG', 'Panasonic', 'Prag', 'Jinko', 'Felicity', 'Hikvision', 'HP', 'Others'].map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
                   </select>
                 </div>
               </div>

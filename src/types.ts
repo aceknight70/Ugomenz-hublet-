@@ -5,6 +5,7 @@ export interface Product {
   price: number;
   promoPrice?: number;
   category: string;
+  brand?: string; // Brand category (e.g. Samsung, LG, etc.)
   stockStatus: 'In Stock' | 'Out of Stock';
   description: string;
   // Primary galllery assets
@@ -85,4 +86,22 @@ export interface CampaignConfig {
   storeOpeningHours?: string;
   brandLogoUrl?: string;
 }
+
+export const getProductBrand = (product: { name: string; brand?: string }): string => {
+  if (product.brand && product.brand !== 'Others') return product.brand;
+  const nameLower = product.name.toLowerCase();
+  if (nameLower.includes('samsung')) return 'Samsung';
+  if (nameLower.includes('hisense')) return 'Hisense';
+  if (nameLower.includes('bruhm')) return 'Bruhm';
+  if (nameLower.includes('scanfrost')) return 'Scanfrost';
+  if (nameLower.includes('lg')) return 'LG';
+  if (nameLower.includes('panasonic')) return 'Panasonic';
+  if (nameLower.includes('prag')) return 'Prag';
+  if (nameLower.includes('jinko')) return 'Jinko';
+  if (nameLower.includes('felicity')) return 'Felicity';
+  if (nameLower.includes('hikvision')) return 'Hikvision';
+  if (nameLower.includes('hp')) return 'HP';
+  return 'Others';
+};
+
 

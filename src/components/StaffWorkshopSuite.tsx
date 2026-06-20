@@ -4,9 +4,12 @@ import {
   Lock, Plus, Trash2, Check, BarChart2, Activity, Sliders, Users,
   ArrowUpDown, Download, Upload, Edit, X
 } from 'lucide-react';
-import { Product, Variant, Review, ManagerStatus, CampaignConfig, GMQuery, AnalyticsData } from '../types';
+import { Product, Variant, Review, ManagerStatus, CampaignConfig, GMQuery, AnalyticsData, getProductBrand } from '../types';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../firebase';
+import SpreadsheetImporter from './SpreadsheetImporter';
+
+const SHOP_BRANDS = ['Samsung', 'Hisense', 'Bruhm', 'Scanfrost', 'LG', 'Panasonic', 'Prag', 'Jinko', 'Felicity', 'Hikvision', 'HP', 'Others'];
 
 interface ImageUploadInputProps {
   label: string;
@@ -156,6 +159,8 @@ interface StaffWorkshopSuiteProps {
   categories: string[];
   analytics: AnalyticsData;
   setAnalytics: React.Dispatch<React.SetStateAction<AnalyticsData>>;
+  showroomPhotos: any[];
+  setShowroomPhotos: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 export default function StaffWorkshopSuite({
@@ -175,7 +180,9 @@ export default function StaffWorkshopSuite({
   handleStaffLogout,
   categories,
   analytics,
-  setAnalytics
+  setAnalytics,
+  showroomPhotos,
+  setShowroomPhotos
 }: StaffWorkshopSuiteProps) {
   const [staffTab, setStaffTab] = useState<'campaign' | 'catalog' | 'analytics' | 'experts' | 'tickets'>('campaign');
   const [campaignWorkbenchTab, setCampaignWorkbenchTab] = useState<'products' | 'videos' | 'holiday' | 'editor' | 'records'>('products');
@@ -192,6 +199,9 @@ export default function StaffWorkshopSuite({
   const [bulkModifierPercent, setBulkModifierPercent] = useState<number>(0);
   const [bulkTargetCategory, setBulkTargetCategory] = useState<string>('All');
   const [quickAddRowActive, setQuickAddRowActive] = useState(false);
+  const [isSpreadsheetImporterActive, setIsSpreadsheetImporterActive] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [bulkSelectActive, setBulkSelectActive] = useState(false);
   const [editForm, setEditForm] = useState<Product | null>(null);
 
   // Diagnostic tracker states for Phase 3
@@ -200,10 +210,16 @@ export default function StaffWorkshopSuite({
   ]);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
+  const [newWalkthroughPin, setNewWalkthroughPin] = useState({
+    title: '',
+    description: '',
+    imageUrl: ''
+  });
   const [quickNewRow, setQuickNewRow] = useState({
     name: '',
     model: '',
     category: 'Televisions',
+    brand: 'Others',
     price: 0,
     promoPrice: 0,
     stockStatus: 'In Stock' as 'In Stock' | 'Out of Stock'
@@ -216,6 +232,7 @@ export default function StaffWorkshopSuite({
     price: 0,
     promoPrice: 0,
     category: 'Televisions',
+    brand: 'Others',
     stockStatus: 'In Stock' as 'In Stock' | 'Out of Stock',
     description: '',
     heroImage: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
@@ -1047,6 +1064,7 @@ export default function StaffWorkshopSuite({
                   price: Number(newProduct.price),
                   promoPrice: Number(newProduct.promoPrice) || undefined,
                   category: newProduct.category,
+                  brand: newProduct.brand || getProductBrand({ name: newProduct.name }),
                   stockStatus: newProduct.stockStatus,
                   description: newProduct.description,
                   heroImage: newProduct.heroImage,
@@ -1077,6 +1095,7 @@ export default function StaffWorkshopSuite({
                   price: 0,
                   promoPrice: 0,
                   category: 'Televisions',
+                  brand: 'Others',
                   stockStatus: 'In Stock',
                   description: '',
                   heroImage: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
@@ -1089,7 +1108,8 @@ export default function StaffWorkshopSuite({
               };
 
               return (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="space-y-6 animate-scaleIn">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   {/* Primary card */}
                   <div className="bg-[#0F172A] border border-zinc-850 p-6 rounded-2xl space-y-4">
                     <h3 className="text-sm font-bold uppercase text-white border-b border-zinc-800 pb-2">1. Base Specifications</h3>
@@ -1140,7 +1160,7 @@ export default function StaffWorkshopSuite({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 text-xs font-semibold">
+                    <div className="grid grid-cols-3 gap-3 text-xs font-semibold">
                       <div>
                         <label className="block text-[9px] text-zinc-400 mb-0.5 uppercase tracking-wide">Category Department</label>
                         <select
@@ -1150,6 +1170,18 @@ export default function StaffWorkshopSuite({
                         >
                           {categories.filter(c => c !== 'All').map(c => (
                             <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-[#E8600A] mb-0.5 uppercase tracking-wide">Brand Category</label>
+                        <select
+                          value={newProduct.brand}
+                          onChange={e => setNewProduct(prev => ({ ...prev, brand: e.target.value }))}
+                          className="w-full bg-[#050B18] border border-zinc-800 rounded p-2.5 text-white cursor-pointer"
+                        >
+                          {SHOP_BRANDS.map(b => (
+                            <option key={b} value={b}>{b}</option>
                           ))}
                         </select>
                       </div>
@@ -1326,6 +1358,150 @@ export default function StaffWorkshopSuite({
                     >
                       Deploy Product Configuration &rarr;
                     </button>
+                  </div>
+                </div>
+
+                  {/* GALLERY WALKTHROUGH PINS MANAGER */}
+                  <div className="bg-[#0F172A] border border-zinc-850 p-6 rounded-2xl space-y-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-800 pb-3 gap-2">
+                      <div>
+                        <h3 className="text-sm font-bold uppercase text-white flex items-center gap-1.5">
+                          🎨 GALLERY HUB WALKTHROUGH PINS MANAGER
+                        </h3>
+                        <p className="text-[11px] text-zinc-400">Deploy, configure and remove high-definition walkthrough photographs that are shown in the Inspiration Gallery.</p>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold bg-[#E8600A]/10 text-[#E8600A] px-2.5 py-1 rounded border border-[#E8600A]/20">Active Tab: Gallery</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Left Side: Create Pin form */}
+                      <div className="lg:col-span-1 space-y-4 bg-zinc-950/60 p-5 rounded-xl border border-zinc-900">
+                        <h4 className="text-xs uppercase font-extrabold text-[#E8600A] tracking-wider flex items-center gap-1">
+                          <span className="inline-block w-2 h-2 rounded-full bg-[#E8600A]"></span>
+                          Deploy New Inspiration Pin
+                        </h4>
+                        
+                        <div className="space-y-4 text-xs font-semibold">
+                          <div>
+                            <label className="block text-[9px] text-zinc-400 mb-1 uppercase tracking-wider">Pin Title</label>
+                            <input
+                              type="text"
+                              value={newWalkthroughPin.title}
+                              onChange={e => setNewWalkthroughPin(prev => ({ ...prev, title: e.target.value }))}
+                              placeholder="e.g. Premium Television Suite"
+                              className="w-full bg-[#050B18] border border-zinc-800 rounded-lg p-2.5 text-white placeholder-zinc-650"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] text-zinc-400 mb-1 uppercase tracking-wider">Pin Subphrase Description</label>
+                            <textarea
+                              rows={3}
+                              value={newWalkthroughPin.description}
+                              onChange={e => setNewWalkthroughPin(prev => ({ ...prev, description: e.target.value }))}
+                              placeholder="e.g. Exclusive high-definition setup displaying premium Bruhm, Samsung and LG televisions with custom brackets."
+                              className="w-full bg-[#050B18] border border-zinc-800 rounded-lg p-2.5 text-white placeholder-zinc-650 resize-none leading-relaxed"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] text-zinc-400 mb-1 uppercase tracking-wider">Pin Photographic Image</label>
+                            <ImageUploadInput
+                              label="Upload Pin Image"
+                              value={newWalkthroughPin.imageUrl}
+                              onChange={val => setNewWalkthroughPin(prev => ({ ...prev, imageUrl: val }))}
+                              placeholder="Paste picture URL or upload straight from file"
+                              idPrefix="walkthrough-inspiration-uploader"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newWalkthroughPin.imageUrl) {
+                                alert("Photo image upload or URL is mandatory to deploy a visual walkthrough pin!");
+                                return;
+                              }
+                              const textTitle = newWalkthroughPin.title.trim() || `Walkthrough Corner - ${new Date().toLocaleDateString()}`;
+                              const textDesc = newWalkthroughPin.description.trim() || "Experience state-of-the-art tech configurations displayed live inside Warri premium electronic mall.";
+                              
+                              const item = {
+                                id: `custom-photo-${Date.now()}`,
+                                title: textTitle,
+                                description: textDesc,
+                                imageUrl: newWalkthroughPin.imageUrl
+                              };
+
+                              const updated = [item, ...showroomPhotos];
+                              setShowroomPhotos(updated);
+                              localStorage.setItem('ug_extra_photos', JSON.stringify(updated));
+
+                              alert(`Success: Walkthrough Pin "${textTitle}" deployed live!`);
+                              setNewWalkthroughPin({
+                                title: '',
+                                description: '',
+                                imageUrl: ''
+                              });
+                            }}
+                            className="w-full py-2.5 bg-[#E8600A] hover:bg-[#ff7518] text-white text-xs font-black uppercase rounded-lg transition-all cursor-pointer shadow-md shadow-[#E8600A]/10 text-center tracking-wider"
+                          >
+                            Commit Walkthrough Pin &rarr;
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right Side: Active deployed gallery photos */}
+                      <div className="lg:col-span-2 space-y-4">
+                        <div className="flex justify-between items-center bg-[#050B18] p-3 rounded-lg border border-zinc-850/60">
+                          <h4 className="text-xs uppercase font-extrabold text-white tracking-wider">
+                            Active Live Gallery Pins ({showroomPhotos?.length || 0})
+                          </h4>
+                          <p className="text-[10px] text-zinc-500">Live Synchronised Database</p>
+                        </div>
+
+                        <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1 no-scrollbar">
+                          {(!showroomPhotos || showroomPhotos.length === 0) ? (
+                            <div className="text-center py-10 text-zinc-500 italic text-xs font-semibold bg-zinc-950/40 rounded-xl border border-dashed border-zinc-850">
+                              No active walkthrough photo pins registered. Populate first with standard presets or custom uploads.
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              {showroomPhotos.map((ph, i) => (
+                                <div key={ph.id || `ph-pin-${i}`} className="p-3 bg-zinc-950/80 border border-zinc-850 rounded-xl flex items-start gap-3 relative hover:border-zinc-700/80 transition-all">
+                                  {ph.imageUrl ? (
+                                    <img src={ph.imageUrl} alt={ph.title} className="w-16 h-16 rounded-lg object-cover border border-zinc-800 shrink-0 shadow-inner" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <div className="w-16 h-16 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
+                                      <ImageIcon className="w-6 h-6 text-zinc-600" />
+                                    </div>
+                                  )}
+                                  <div className="text-xs min-w-0 flex-1 pr-4">
+                                    <p className="font-extrabold text-white truncate text-[12px]">{ph.title || `Inspiration Spot #${i + 1}`}</p>
+                                    <p className="text-zinc-400 text-[10.5px] leading-relaxed mt-1 line-clamp-2" title={ph.description}>
+                                      {ph.description || "Incorporate active inspiration visual showcases straight from Deco Road Plazas."}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm(`Verify deleting inspiration walkthrough pin: "${ph.title || `Pin #${i + 1}`}"?`)) {
+                                        const updated = showroomPhotos.filter(item => item.id !== ph.id && item !== ph);
+                                        setShowroomPhotos(updated);
+                                        localStorage.setItem('ug_extra_photos', JSON.stringify(updated));
+                                      }
+                                    }}
+                                    className="p-1 text-zinc-500 hover:text-red-400 hover:bg-red-950/20 rounded border border-transparent hover:border-red-900/40 transition-all text-xs font-bold leading-none shrink-0"
+                                    title="Dismount Pin"
+                                  >
+                                    &times;
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -1675,6 +1851,7 @@ export default function StaffWorkshopSuite({
               price: Number(quickNewRow.price),
               promoPrice: quickNewRow.promoPrice ? Number(quickNewRow.promoPrice) : undefined,
               category: quickNewRow.category,
+              brand: quickNewRow.brand || getProductBrand({ name: quickNewRow.name }),
               stockStatus: quickNewRow.stockStatus,
               description: `Inline rapid registration entry. Primary specification configuration placeholder created dynamically for model ${quickNewRow.model}. Customize angles inside the brand workbench.`,
               heroImage: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
@@ -1699,6 +1876,7 @@ export default function StaffWorkshopSuite({
               name: '',
               model: '',
               category: 'Televisions',
+              brand: 'Others',
               price: 0,
               promoPrice: 0,
               stockStatus: 'In Stock'
@@ -1863,25 +2041,70 @@ export default function StaffWorkshopSuite({
               {/* INLINE RAPID ENTRY TRIGGER & EXPANDER */}
               <div className="bg-[#0A0F1E] border border-zinc-850 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                 <div className="space-y-0.5">
-                  <h4 className="text-xs font-black uppercase text-white">Inline Row Deployment Center</h4>
-                  <p className="text-[10px] text-zinc-400">Append products to listing instantly without leaving the high-density grid workspace.</p>
+                  <h4 className="text-xs font-black uppercase text-white">Inline Row &amp; Bulk Excel Deployment Center</h4>
+                  <p className="text-[10px] text-zinc-400">Append items instantly inline, bulk-import whole inventory worksheets via SheetJS, or activate bulk select multi-deletion.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setQuickAddRowActive(p => !p)}
-                  className={`px-4 py-2 border rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-                    quickAddRowActive ? 'bg-red-950/40 border-red-500/50 text-red-400' : 'bg-[#E8600A]/10 border-[#E8600A]/20 text-[#E8600A] hover:bg-[#E8600A]/20'
-                  }`}
-                >
-                  {quickAddRowActive ? '× Cancel Inline Drawer' : '+ Launch Rapid Inline Row'}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickAddRowActive(p => !p);
+                      setIsSpreadsheetImporterActive(false);
+                      setBulkSelectActive(false);
+                    }}
+                    className={`px-4 py-2 border rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                      quickAddRowActive ? 'bg-red-950/40 border-red-500/50 text-red-400' : 'bg-[#E8600A]/10 border-[#E8600A]/20 text-[#E8600A] hover:bg-[#E8600A]/20'
+                    }`}
+                  >
+                    {quickAddRowActive ? '× Cancel Inline Drawer' : '+ Launch Rapid Inline Row'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSpreadsheetImporterActive(p => !p);
+                      setQuickAddRowActive(false);
+                      setBulkSelectActive(false);
+                    }}
+                    className={`px-4 py-2 border rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isSpreadsheetImporterActive ? 'bg-red-950/40 border-red-500/50 text-red-100' : 'bg-[#1a6fd4]/10 border-[#1a6fd4]/20 text-[#1a6fd4] hover:bg-[#1a6fd4]/20'
+                    }`}
+                  >
+                    {isSpreadsheetImporterActive ? '× Close Excel Importer' : '⚡ Bulk Sheets Importer'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkSelectActive(p => !p);
+                      setQuickAddRowActive(false);
+                      setIsSpreadsheetImporterActive(false);
+                      setSelectedProductIds([]);
+                    }}
+                    className={`px-4 py-2 border rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                      bulkSelectActive ? 'bg-red-950/60 border-red-500 text-red-100' : 'bg-rose-950/30 border-rose-500/20 text-rose-400 hover:bg-rose-950/50'
+                    }`}
+                  >
+                    {bulkSelectActive ? '× Close Multi-Delete' : '☑️ Multi-Delete Mode'}
+                  </button>
+                </div>
               </div>
+
+              {isSpreadsheetImporterActive && (
+                <div className="animate-scaleIn z-10 relative">
+                  <SpreadsheetImporter 
+                    currentProducts={products}
+                    onCatalogSynced={(updatedList) => {
+                      setProducts(updatedList);
+                    }}
+                    categories={categories}
+                  />
+                </div>
+              )}
 
               {quickAddRowActive && (
                 <div className="bg-[#0F172A] border border-[#E8600A]/35 p-5 rounded-xl space-y-4 animate-scaleIn">
                   <h4 className="text-xs uppercase font-extrabold text-white tracking-widest border-b border-zinc-850 pb-2">📂 RAPID INLINE ROW REGISTRY</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3 text-xs font-semibold">
-                    <div className="md:col-span-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3 text-xs font-semibold">
+                    <div className="md:col-span-2 lg:col-span-1 xl:col-span-2">
                       <label className="text-[9px] uppercase text-zinc-500 block mb-0.5">Item Title</label>
                       <input
                         type="text"
@@ -1910,6 +2133,18 @@ export default function StaffWorkshopSuite({
                       >
                         {categories.filter(c => c !== 'All').map(c => (
                           <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase text-[#E8600A] block mb-0.5">Brand</label>
+                      <select
+                        value={quickNewRow.brand}
+                        onChange={e => setQuickNewRow(prev => ({ ...prev, brand: e.target.value }))}
+                        className="w-full bg-[#050B18] border border-zinc-800 rounded p-2 text-white cursor-pointer"
+                      >
+                        {SHOP_BRANDS.map(b => (
+                          <option key={b} value={b}>{b}</option>
                         ))}
                       </select>
                     </div>
@@ -1954,6 +2189,94 @@ export default function StaffWorkshopSuite({
                 </div>
               )}
 
+              {bulkSelectActive && (
+                <div className="bg-[#120B0E] border border-rose-500/30 p-5 rounded-xl space-y-4 animate-scaleIn">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="text-left space-y-0.5">
+                      <h4 className="text-xs uppercase font-extrabold text-rose-400 tracking-widest flex items-center gap-2">
+                        <span>🚨</span> MULTI-DELETE COMMAND STATION
+                      </h4>
+                      <p className="text-[10px] text-zinc-400">
+                        Check rows inside the matrix table below, then click "Execute Permanent Deletion" to remove them all at once.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const visibleIds = sortedCells.map(p => p.id);
+                          setSelectedProductIds(prev => {
+                            const combined = new Set([...prev, ...visibleIds]);
+                            return Array.from(combined);
+                          });
+                        }}
+                        className="px-3 py-1.5 bg-[#120B10] hover:bg-zinc-800 text-[10px] font-black uppercase rounded text-zinc-300 border border-zinc-800 transition-all cursor-pointer"
+                      >
+                        Select All Filtered ({sortedCells.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedProductIds([]);
+                        }}
+                        className="px-3 py-1.5 bg-[#120B10] hover:bg-zinc-800 text-[10px] font-black uppercase rounded text-zinc-300 border border-zinc-800 transition-all cursor-pointer"
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
+                  </div>
+
+                  {selectedProductIds.length > 0 ? (
+                    <div className="p-3.5 bg-rose-950/20 border border-rose-500/15 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-rose-400 font-extrabold font-mono px-2 py-0.5 bg-rose-950/50 border border-rose-500/30 rounded text-[11px] animate-pulse">
+                          {selectedProductIds.length} Selected
+                        </span>
+                        <div className="max-h-12 overflow-y-auto max-w-lg flex flex-wrap gap-1 text-[10px] text-zinc-400">
+                          {products
+                            .filter(p => selectedProductIds.includes(p.id))
+                            .map(p => (
+                              <span key={p.id} className="bg-[#0A0F1E] border border-zinc-800 px-1.5 py-0.5 rounded font-mono">
+                                {p.model || p.name.slice(0, 15)}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (window.confirm(`Are you absolutely sure you want to permanently delete the ${selectedProductIds.length} selected product(s)? This will wipe them from Firestore instantly!`)) {
+                            const deletedIds = new Set(selectedProductIds);
+                            setProducts(prev => {
+                              const remaining = prev.filter(p => !deletedIds.has(p.id));
+                              localStorage.setItem('ug_products_live', JSON.stringify(remaining));
+                              return remaining;
+                            });
+                            
+                            const deletePromises = selectedProductIds.map(id =>
+                              deleteDoc(doc(db, 'products', id)).catch(err => {
+                                console.error(`Failed to delete product ${id}:`, err);
+                              })
+                            );
+
+                            await Promise.all(deletePromises);
+                            setSelectedProductIds([]);
+                            alert("Successfully deleted specified hardware listings.");
+                          }
+                        }}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-black uppercase rounded-lg shadow-lg hover:shadow-rose-900 transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        🗑️ Execute Permanent Deletion ({selectedProductIds.length})
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-2.5 text-zinc-500 font-mono text-[10px] uppercase border border-dashed border-zinc-850 rounded-lg">
+                      No products selected yet. Click checkboxes in the matrix below to stack selections.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* SPREADSHEET TABLE GRID CONTAINER */}
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -1980,6 +2303,25 @@ export default function StaffWorkshopSuite({
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-zinc-800 text-[10px] uppercase font-bold text-zinc-400 tracking-wider bg-[#0C1222] select-none">
+                        {bulkSelectActive && (
+                          <th className="p-3 w-12 text-center bg-[#120B0E]/80">
+                            <input
+                              type="checkbox"
+                              checked={sortedCells.length > 0 && sortedCells.every(p => selectedProductIds.includes(p.id))}
+                              onChange={() => {
+                                const visibleIds = sortedCells.map(p => p.id);
+                                const allSelected = visibleIds.every(id => selectedProductIds.includes(id));
+                                if (allSelected) {
+                                  setSelectedProductIds(prev => prev.filter(id => !visibleIds.includes(id)));
+                                } else {
+                                  setSelectedProductIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+                                }
+                              }}
+                              className="w-4 h-4 accent-rose-600 cursor-pointer"
+                              title="Toggle select all filtered products"
+                            />
+                          </th>
+                        )}
                         <th className="p-3 cursor-pointer hover:text-white transition-all" onClick={() => toggleSort('model')}>
                           <div className="flex items-center gap-1">
                             Model Code <ArrowUpDown className="w-3 h-3 text-zinc-500" />
@@ -1993,6 +2335,11 @@ export default function StaffWorkshopSuite({
                         <th className="p-4 cursor-pointer hover:text-white transition-all" onClick={() => toggleSort('category')}>
                           <div className="flex items-center gap-1">
                             Department <ArrowUpDown className="w-3 h-3 text-zinc-500" />
+                          </div>
+                        </th>
+                        <th className="p-3 cursor-pointer hover:text-white transition-all" onClick={() => toggleSort('brand' as any)}>
+                          <div className="flex items-center gap-1">
+                            Brand <ArrowUpDown className="w-3 h-3 text-zinc-500" />
                           </div>
                         </th>
                         <th className="p-3 cursor-pointer hover:text-white transition-all" onClick={() => toggleSort('price')}>
@@ -2021,10 +2368,25 @@ export default function StaffWorkshopSuite({
                     <tbody>
                       {sortedCells.length > 0 ? (
                         sortedCells.map((p, idx) => {
-                          const bg = idx % 2 === 0 ? 'bg-zinc-950/20' : 'bg-transparent';
+                          const isSelected = selectedProductIds.includes(p.id);
+                          const bg = isSelected ? 'bg-[#2D0B12]/40 border-l border-rose-500/20' : (idx % 2 === 0 ? 'bg-zinc-950/20' : 'bg-transparent');
                           const usdPrice = exchangeRateUSD > 0 ? Math.round(p.price / exchangeRateUSD) : 0;
                           return (
                             <tr key={p.id} className={`border-b border-zinc-900 font-sans font-semibold text-xs ${bg} hover:bg-zinc-900/40 transition-all`}>
+                              {bulkSelectActive && (
+                                <td className="p-3 text-center bg-[#120B0E]/30 border-r border-[#2D0B12]/80">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => {
+                                      setSelectedProductIds(prev =>
+                                        prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                                      );
+                                    }}
+                                    className="w-4 h-4 accent-rose-600 cursor-pointer"
+                                  />
+                                </td>
+                              )}
                               <td className="p-3">
                                 <input
                                   type="text"
@@ -2049,6 +2411,17 @@ export default function StaffWorkshopSuite({
                                 >
                                   {categories.filter(c => c !== 'All').map(c => (
                                     <option key={c} value={c}>{c}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="p-3 bg-zinc-950/20">
+                                <select
+                                  value={p.brand || getProductBrand(p)}
+                                  onChange={e => handleCellChange(p.id, 'brand', e.target.value)}
+                                  className="bg-transparent text-zinc-350 hover:bg-zinc-900 rounded p-1 cursor-pointer text-[11px]"
+                                >
+                                  {SHOP_BRANDS.map(b => (
+                                    <option key={b} value={b}>{b}</option>
                                   ))}
                                 </select>
                               </td>
@@ -2110,7 +2483,7 @@ export default function StaffWorkshopSuite({
                         })
                       ) : (
                         <tr>
-                          <td colSpan={8} className="text-center py-10 text-zinc-550 italic font-mono uppercase bg-zinc-950/20">
+                          <td colSpan={bulkSelectActive ? 10 : 9} className="text-center py-10 text-zinc-550 italic font-mono uppercase bg-zinc-950/20">
                             No spreadsheet cells found matching the search criteria...
                           </td>
                         </tr>
@@ -2588,6 +2961,18 @@ export default function StaffWorkshopSuite({
                     >
                       <option value="In Stock">In Stock</option>
                       <option value="Out of Stock">Out of Stock</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase text-zinc-500 block mb-1">Brand Category</label>
+                    <select
+                      value={editForm.brand || getProductBrand(editForm)}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, brand: e.target.value } : null)}
+                      className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white cursor-pointer"
+                    >
+                      {SHOP_BRANDS.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
