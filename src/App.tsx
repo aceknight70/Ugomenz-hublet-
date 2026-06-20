@@ -3,7 +3,7 @@ import {
   Image as ImageIcon, PlayCircle, Store, Bot, Share2, FileText, CreditCard,
   Truck, ShieldAlert, Phone, Star, GraduationCap, Settings, Search,
   MessageCircle, CheckCircle, Calendar, DollarSign, Lock, MapPin,
-  Clock, ArrowRight, Copy, Plus, Trash2, ThumbsUp, Check, Loader2, ArrowUpRight,
+  Clock, ArrowRight, Copy, Plus, Trash2, ThumbsUp, Check, Loader2, ArrowUpRight, Edit,
   QrCode, BarChart2, Sliders, Heart, Pin, Maximize2, ChevronLeft, ChevronRight, X,
   Tv, Snowflake, Flame, RotateCw, Eye, Sun, Moon, Layers, ZoomIn, ZoomOut, Wind
 } from 'lucide-react';
@@ -119,6 +119,8 @@ export default function App() {
     return INITIAL_PRODUCTS;
   });
 
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
   const [bank, setBank] = useState<BankDetails>(() => {
     const saved = localStorage.getItem('ug_bank');
     if (saved) {
@@ -185,6 +187,31 @@ export default function App() {
     localStorage.setItem('ug_campaign', JSON.stringify(DEFAULT_CAMPAIGN));
     return DEFAULT_CAMPAIGN;
   });
+
+  const handleDeleteProductInApp = async (prodId: string, prodName: string) => {
+    if (window.confirm(`Are you absolutely sure you want to permanently delete "${prodName}"? This is irreversible.`)) {
+      const updated = products.filter(p => p.id !== prodId);
+      setProducts(updated);
+      localStorage.setItem('ug_products_list', JSON.stringify(updated));
+      
+      // Close detail modal/tab if the currently selected or viewed is deleted
+      if (quickViewProduct?.id === prodId) {
+        setQuickViewProduct(null);
+      }
+      if (selectedGalleryProductId === prodId) {
+        const nextId = updated[0]?.id || '';
+        setSelectedGalleryProductId(nextId);
+      }
+
+      try {
+        await deleteDoc(doc(db, 'products', prodId));
+        alert(`Success: Product "${prodName}" deleted successfully!`);
+      } catch (err: any) {
+        console.error("Firestore error deleting product:", err);
+        handleFirestoreError(err, OperationType.DELETE, `products/${prodId}`);
+      }
+    }
+  };
 
   const handleUpdateCampaign = (updated: Partial<CampaignConfig>) => {
     setCampaign(prev => {
@@ -2344,6 +2371,32 @@ END:VCARD`;
                         <CreditCard className="w-4 h-4" />
                         Purchase now (Invoice)
                       </button>
+
+                      {/* Staff/Admin Edit and Delete Controls */}
+                      <div className="border-t border-zinc-800/85 pt-3 mt-2 space-y-2 text-left">
+                        <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase tracking-widest font-extrabold">
+                          <span>Staff Controls</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingProduct(selectedGalleryProduct)}
+                            className="py-2.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-white font-syne uppercase font-bold text-[10px] rounded-lg flex items-center justify-center gap-1.5 transition-all outline-none border border-zinc-700/55 cursor-pointer"
+                          >
+                            <Edit className="w-3.5 h-3.5 text-zinc-300" />
+                            Edit Specs
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProductInApp(selectedGalleryProduct.id, selectedGalleryProduct.name)}
+                            className="py-2.5 px-3 bg-red-950/25 hover:bg-red-900/40 text-red-400 font-syne uppercase font-bold text-[10px] rounded-lg flex items-center justify-center gap-1.5 transition-all outline-none border border-red-900/30 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            Delete Item
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2498,6 +2551,32 @@ END:VCARD`;
                         <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-[10px] text-white px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 font-bold">
                           <span className={`w-1.5 h-1.5 rounded-full ${prod.stockStatus === 'In Stock' ? 'bg-[#25D366]' : 'bg-zinc-600'}`}></span>
                           {prod.stockStatus === 'In Stock' ? 'In Stock' : 'Out of Stock'}
+                        </div>
+
+                        {/* Administrative Edit & Delete action overlay shortcuts */}
+                        <div className="absolute top-3 left-3 flex gap-1.6 z-20">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingProduct(prod);
+                            }}
+                            className="p-1.5 rounded-lg bg-zinc-900/90 hover:bg-[#E8600A] text-white border border-zinc-800/80 hover:scale-110 active:scale-90 transition-all cursor-pointer shadow-md"
+                            title="Edit specs"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteProductInApp(prod.id, prod.name);
+                            }}
+                            className="p-1.5 rounded-lg bg-zinc-900/95 hover:bg-red-650 text-red-400 hover:text-white border border-zinc-800/80 hover:scale-110 active:scale-90 transition-all cursor-pointer shadow-md"
+                            title="Delete item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
 
@@ -4098,6 +4177,36 @@ Thank you for choosing UGOMENZ ELECTRONICS!`;
                     {quickViewProduct.stockStatus}
                   </span>
                 </div>
+
+                {/* Staff/Admin Edit & Delete in Quick View */}
+                <div className="border-t border-zinc-800/80 pt-3.5 space-y-2 text-left">
+                  <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase tracking-widest font-extrabold">
+                    <span>Staff Management</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingProduct(quickViewProduct);
+                      }}
+                      className="py-2.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-white font-syne uppercase font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all outline-none border border-zinc-705 cursor-pointer"
+                    >
+                      <Edit className="w-4 h-4 text-zinc-300" />
+                      Edit specs
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleDeleteProductInApp(quickViewProduct.id, quickViewProduct.name);
+                      }}
+                      className="py-2.5 px-3 bg-red-950/25 hover:bg-red-900/40 text-red-400 font-syne uppercase font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all outline-none border border-red-900/30 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                      Delete item
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-zinc-800 mt-6 shrink-0">
@@ -4272,6 +4381,232 @@ Thank you for choosing UGOMENZ ELECTRONICS!`;
           </div>
         );
       })()}
+
+      {/* REUSABLE SPEC SHEET EDITOR MODAL */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0F172A] border border-zinc-800 rounded-2xl w-full max-w-2xl text-left shadow-2xl relative overflow-hidden flex flex-col my-8 max-h-[90vh]">
+            {/* Header */}
+            <div className="p-5 border-b border-zinc-800 flex justify-between items-center bg-[#0C1222]">
+              <div>
+                <h4 className="text-xs uppercase font-extrabold text-[#E8600A] tracking-wider">⚡ Quick-Edit Specifications</h4>
+                <p className="text-white text-sm font-black font-sans mt-0.5">{editingProduct.name || "Unnamed Item"}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingProduct(null)}
+                className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <div className="p-6 overflow-y-auto space-y-4 text-xs font-semibold text-zinc-400">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <div>
+                  <label className="text-[10px] uppercase text-zinc-500 block mb-1">Product Display Name</label>
+                  <input
+                    type="text"
+                    value={editingProduct.name}
+                    onChange={e => setEditingProduct(prev => prev ? { ...prev, name: e.target.value } : null)}
+                    className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white focus:border-[#E8600A] focus:outline-none"
+                    placeholder="Product Name"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-zinc-500 block mb-1">Model / SKU ID</label>
+                  <input
+                    type="text"
+                    value={editingProduct.model || ''}
+                    onChange={e => setEditingProduct(prev => prev ? { ...prev, model: e.target.value } : null)}
+                    className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white font-mono focus:border-[#E8600A] focus:outline-none"
+                    placeholder="Model SKU Code"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                <div>
+                  <label className="text-[10px] uppercase text-zinc-500 block mb-1">Department Category</label>
+                  <select
+                    value={editingProduct.category}
+                    onChange={e => setEditingProduct(prev => prev ? { ...prev, category: e.target.value } : null)}
+                    className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white cursor-pointer focus:border-[#E8600A] focus:outline-none"
+                  >
+                    {['Televisions', 'Refrigerators', 'Washing Machines', 'Air Conditioners', 'Kitchen Appliances', 'Solar', 'CCTV'].map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-zinc-500 block mb-1">Price (₦)</label>
+                  <input
+                    type="number"
+                    value={editingProduct.price || ''}
+                    onChange={e => setEditingProduct(prev => prev ? { ...prev, price: Number(e.target.value) } : null)}
+                    className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white font-mono focus:border-[#E8600A] focus:outline-none"
+                    placeholder="Price in Naira"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-zinc-500 block mb-1">Promo Price (₦ - Optional)</label>
+                  <input
+                    type="number"
+                    value={editingProduct.promoPrice || ''}
+                    onChange={e => setEditingProduct(prev => prev ? { ...prev, promoPrice: e.target.value ? Number(e.target.value) : undefined } : null)}
+                    className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white font-mono focus:border-[#E8600A] focus:outline-none"
+                    placeholder="Promo Price"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <div>
+                  <label className="text-[10px] uppercase text-zinc-500 block mb-1">Availability Status</label>
+                  <select
+                    value={editingProduct.stockStatus}
+                    onChange={e => setEditingProduct(prev => prev ? { ...prev, stockStatus: e.target.value as any } : null)}
+                    className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white cursor-pointer focus:border-[#E8600A] focus:outline-none"
+                  >
+                    <option value="In Stock">In Stock</option>
+                    <option value="Out of Stock">Out of Stock</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="text-left">
+                <label className="text-[10px] uppercase text-zinc-500 block mb-1">Detailed Description</label>
+                <textarea
+                  value={editingProduct.description || ''}
+                  onChange={e => setEditingProduct(prev => prev ? { ...prev, description: e.target.value } : null)}
+                  rows={3}
+                  className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white font-sans leading-relaxed focus:border-[#E8600A] focus:outline-none"
+                  placeholder="Insert custom parameters, sizing metrics, or showroom details here..."
+                />
+              </div>
+
+              {/* Angle views uploader/inputs */}
+              <div className="border-t border-zinc-800 pt-4 space-y-4 text-left">
+                <h5 className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider">🖼️ Specs Imagery (URLs or base64)</h5>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[9px] uppercase text-zinc-500 block mb-1">Hero Image (Default View)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editingProduct.heroImage}
+                        onChange={e => setEditingProduct(prev => prev ? { ...prev, heroImage: e.target.value } : null)}
+                        className="flex-grow bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white text-xs font-mono"
+                        placeholder="Image URL"
+                      />
+                      <label className="px-3 bg-zinc-800 hover:bg-zinc-700 hover:text-white rounded-xl flex items-center justify-center cursor-pointer text-xs font-bold shrink-0 transition-all">
+                        Upload
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                if (reader.result) {
+                                  setEditingProduct(prev => prev ? { ...prev, heroImage: reader.result as string } : null);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {['angle2', 'angle3', 'angle4', 'angle5'].map((angKey) => (
+                      <div key={angKey}>
+                        <label className="text-[9px] uppercase text-zinc-500 block mb-1">Alt {angKey.replace('angle', 'Angle ')}</label>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            value={(editingProduct as any)[angKey] || ''}
+                            onChange={e => setEditingProduct(prev => prev ? { ...prev, [angKey]: e.target.value } : null)}
+                            className="flex-grow bg-[#050B18] border border-zinc-800 rounded-xl p-2 text-white text-[10px] font-mono"
+                            placeholder="URL"
+                          />
+                          <label className="px-2 bg-zinc-800 hover:bg-zinc-700 hover:text-white rounded-xl flex items-center justify-center cursor-pointer text-[10px] font-bold shrink-0 transition-all">
+                            Upload
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    if (reader.result) {
+                                      setEditingProduct(prev => prev ? { ...prev, [angKey]: reader.result as string } : null);
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-zinc-800 bg-[#0C1222] flex justify-end gap-3.5">
+              <button
+                type="button"
+                onClick={() => setEditingProduct(null)}
+                className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-405 hover:text-white text-xs font-bold uppercase rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!editingProduct.name || !editingProduct.category || editingProduct.price <= 0) {
+                    alert("A valid name, category, and positive price are required specifications!");
+                    return;
+                  }
+                  
+                  const updatedList = products.map(p => p.id === editingProduct.id ? editingProduct : p);
+                  setProducts(updatedList);
+                  localStorage.setItem('ug_products_list', JSON.stringify(updatedList));
+
+                  // If edited item was in quickViewProduct, update it too
+                  if (quickViewProduct?.id === editingProduct.id) {
+                    setQuickViewProduct(editingProduct);
+                  }
+
+                  try {
+                    await setDoc(doc(db, 'products', editingProduct.id), editingProduct);
+                    alert(`Success: Product "${editingProduct.name}" updated successfully!`);
+                    setEditingProduct(null);
+                  } catch (err: any) {
+                    console.error("Firestore error saving edited product:", err);
+                    handleFirestoreError(err, OperationType.UPDATE, `products/${editingProduct.id}`);
+                  }
+                }}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold uppercase rounded-xl shadow-lg tracking-wider cursor-pointer"
+              >
+                Save Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

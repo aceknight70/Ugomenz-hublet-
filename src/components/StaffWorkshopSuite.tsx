@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Image as ImageIcon, PlayCircle, Store, CreditCard, Search, MessageCircle,
   Lock, Plus, Trash2, Check, BarChart2, Activity, Sliders, Users,
-  ArrowUpDown, Download, Upload
+  ArrowUpDown, Download, Upload, Edit, X
 } from 'lucide-react';
 import { Product, Variant, Review, ManagerStatus, CampaignConfig, GMQuery, AnalyticsData } from '../types';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -192,6 +192,7 @@ export default function StaffWorkshopSuite({
   const [bulkModifierPercent, setBulkModifierPercent] = useState<number>(0);
   const [bulkTargetCategory, setBulkTargetCategory] = useState<string>('All');
   const [quickAddRowActive, setQuickAddRowActive] = useState(false);
+  const [editForm, setEditForm] = useState<Product | null>(null);
 
   // Diagnostic tracker states for Phase 3
   const [diagnosticsLogs, setDiagnosticsLogs] = useState<string[]>([
@@ -2014,7 +2015,7 @@ export default function StaffWorkshopSuite({
                             Stock Rating <ArrowUpDown className="w-3 h-3 text-zinc-500" />
                           </div>
                         </th>
-                        <th className="p-3 text-center">Trash</th>
+                        <th className="p-3 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2084,14 +2085,25 @@ export default function StaffWorkshopSuite({
                                   {p.stockStatus}
                                 </button>
                               </td>
-                              <td className="p-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleTrash(p.id, p.name)}
-                                  className="text-zinc-650 hover:text-red-400 p-1 bg-[#050B18] border border-zinc-805 rounded transition-all cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                              <td className="p-3">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditForm(p)}
+                                    className="text-zinc-300 hover:text-indigo-400 p-1.5 bg-[#050B18] border border-zinc-800 hover:border-indigo-500/50 rounded-lg transition-all cursor-pointer"
+                                    title="Edit entire product details"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTrash(p.id, p.name)}
+                                    className="text-zinc-500 hover:text-red-400 p-1.5 bg-[#050B18] border border-zinc-800 hover:border-red-500/50 rounded-lg transition-all cursor-pointer"
+                                    title="Delete product"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -2484,6 +2496,220 @@ export default function StaffWorkshopSuite({
                   <p className="text-[10px] text-zinc-600 mt-1">Communications list cleared at Deco Road Warri.</p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {editForm && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-[#0F172A] border border-zinc-800 rounded-2xl w-full max-w-2xl text-left shadow-2xl relative overflow-hidden flex flex-col my-8 max-h-[90vh]">
+              {/* Header */}
+              <div className="p-5 border-b border-zinc-850 flex justify-between items-center bg-[#0C1222]">
+                <div>
+                  <h4 className="text-xs uppercase font-extrabold text-[#E8600A] tracking-wider">⚙️ Edit Product Specifications</h4>
+                  <p className="text-white text-sm font-black font-sans mt-0.5">{editForm.name || "Unnamed Product"}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditForm(null)}
+                  className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Scrollable Form Body */}
+              <div className="p-6 overflow-y-auto space-y-4 text-xs font-semibold text-zinc-400">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[9px] uppercase text-zinc-500 block mb-1">Item Display Name</label>
+                    <input
+                      type="text"
+                      value={editForm.name}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, name: e.target.value } : null)}
+                      className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white"
+                      placeholder="Display Name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase text-zinc-500 block mb-1">SKU Model ID</label>
+                    <input
+                      type="text"
+                      value={editForm.model || ''}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, model: e.target.value } : null)}
+                      className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white font-mono"
+                      placeholder="Model Code"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[9px] uppercase text-zinc-500 block mb-1">Department Category</label>
+                    <select
+                      value={editForm.category}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, category: e.target.value } : null)}
+                      className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white cursor-pointer"
+                    >
+                      {categories.filter(c => c !== 'All').map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase text-zinc-500 block mb-1">Base Price (₦)</label>
+                    <input
+                      type="number"
+                      value={editForm.price || ''}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, price: Number(e.target.value) } : null)}
+                      className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white font-mono"
+                      placeholder="Price in Naira"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase text-zinc-500 block mb-1">Promo Price (₦ - Optional)</label>
+                    <input
+                      type="number"
+                      value={editForm.promoPrice || ''}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, promoPrice: e.target.value ? Number(e.target.value) : undefined } : null)}
+                      className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white font-mono"
+                      placeholder="Discounted Price"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[9px] uppercase text-zinc-500 block mb-1">Stock Parameter</label>
+                    <select
+                      value={editForm.stockStatus}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, stockStatus: e.target.value as any } : null)}
+                      className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white cursor-pointer"
+                    >
+                      <option value="In Stock">In Stock</option>
+                      <option value="Out of Stock">Out of Stock</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[9px] uppercase text-zinc-500 block mb-1">Product Description</label>
+                  <textarea
+                    value={editForm.description || ''}
+                    onChange={e => setEditForm(prev => prev ? { ...prev, description: e.target.value } : null)}
+                    rows={3}
+                    className="w-full bg-[#050B18] border border-zinc-800 rounded-xl p-2.5 text-white font-sans leading-relaxed"
+                    placeholder="Specification specs, parameters or installation descriptions..."
+                  />
+                </div>
+
+                {/* Primary Images Area */}
+                <div className="border-t border-zinc-800/60 pt-4 space-y-4">
+                  <h5 className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">🎨 Product Visual Angles</h5>
+                  <p className="text-[10px] text-zinc-500 -mt-2">Provide custom URLs or upload local images for alternative visual inspect coordinates.</p>
+                  
+                  <div className="space-y-4">
+                    <ImageUploadInput
+                      label="Hero Image (Default View)"
+                      value={editForm.heroImage}
+                      onChange={val => setEditForm(prev => prev ? { ...prev, heroImage: val } : null)}
+                      idPrefix={`edit-${editForm.id}-hero`}
+                    />
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <ImageUploadInput
+                        label="Alternate Angle 2"
+                        value={editForm.angle2 || ''}
+                        onChange={val => setEditForm(prev => prev ? { ...prev, angle2: val } : null)}
+                        idPrefix={`edit-${editForm.id}-a2`}
+                      />
+                      <ImageUploadInput
+                        label="Alternate Angle 3"
+                        value={editForm.angle3 || ''}
+                        onChange={val => setEditForm(prev => prev ? { ...prev, angle3: val } : null)}
+                        idPrefix={`edit-${editForm.id}-a3`}
+                      />
+                      <ImageUploadInput
+                        label="Alternate Angle 4"
+                        value={editForm.angle4 || ''}
+                        onChange={val => setEditForm(prev => prev ? { ...prev, angle4: val } : null)}
+                        idPrefix={`edit-${editForm.id}-a4`}
+                      />
+                      <ImageUploadInput
+                        label="Alternate Angle 5"
+                        value={editForm.angle5 || ''}
+                        onChange={val => setEditForm(prev => prev ? { ...prev, angle5: val } : null)}
+                        idPrefix={`edit-${editForm.id}-a5`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-5 border-t border-zinc-850 bg-[#0C1222] flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Are you absolutely sure you want to permanently delete "${editForm.name}"? This is irreversible.`)) {
+                      const id = editForm.id;
+                      setProducts(prev => {
+                        const out = prev.filter(p => p.id !== id);
+                        localStorage.setItem('ug_products_live', JSON.stringify(out));
+                        return out;
+                      });
+                      deleteDoc(doc(db, 'products', id))
+                        .then(() => {
+                          alert(`Product successfully deleted!`);
+                          setEditForm(null);
+                        })
+                        .catch(err => {
+                          console.error("Firestore error deleting product:", err);
+                          handleFirestoreError(err, OperationType.DELETE, `products/${id}`);
+                        });
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-red-950/40 hover:bg-red-900 border border-red-900 text-red-500 hover:text-white text-xs font-bold uppercase rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                  title="Delete product permanently"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Product
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditForm(null)}
+                    className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white text-xs font-bold uppercase rounded-xl transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!editForm.name || !editForm.model || editForm.price <= 0) {
+                        alert("Primary Name, Specs code and Price are critical attributes!");
+                        return;
+                      }
+                      const updated = products.map(p => p.id === editForm.id ? editForm : p);
+                      setProducts(updated);
+                      localStorage.setItem('ug_products_live', JSON.stringify(updated));
+                      
+                      setDoc(doc(db, 'products', editForm.id), editForm)
+                        .then(() => {
+                          alert(`Success: Product "${editForm.name}" updated successfully!`);
+                          setEditForm(null);
+                        })
+                        .catch(err => {
+                          console.error("Firestore error saving edited product:", err);
+                          handleFirestoreError(err, OperationType.UPDATE, `products/${editForm.id}`);
+                        });
+                    }}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold uppercase rounded-xl shadow-lg tracking-wider cursor-pointer"
+                  >
+                    Save Specifications
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
