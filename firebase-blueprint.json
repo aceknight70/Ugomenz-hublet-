@@ -89,32 +89,9 @@
         "bankDetails": { "type": "string" }
       },
       "required": ["id", "receiptNo", "purpose", "customerName", "customerPhone", "amount", "description", "paymentMethod", "issuedBy", "dateStr"]
-    },
-    "ShowroomProduct": {
-      "title": "ShowroomProduct",
-      "description": "Showroom products with multi-angle perspective data",
-      "type": "object",
-      "properties": {
-        "Brand": { "type": "string" },
-        "Product Code": { "type": "string" },
-        "Category": { "type": "string" },
-        "Description Headline": { "type": "string" },
-        "Description Bullets (Customer View)": { "type": "string" },
-        "Technical Specs (Full)": { "type": "string" },
-        "Price (₦)": { "type": "string" },
-        "Front Image (Cloudinary)": { "type": "string" },
-        "Side Image (Cloudinary)": { "type": "string" },
-        "Back Image (Cloudinary)": { "type": "string" },
-        "Top/Extra Image (Cloudinary)": { "type": "string" }
-      },
-      "required": ["Product Code"]
     }
   },
   "firestore": {
-    "showroom_custom_products/{productId}": {
-      "schema": "ShowroomProduct",
-      "description": "Excel or custom imported/uploaded showroom products"
-    },
     "products/{productId}": {
       "schema": "Product",
       "description": "Products list editable by logged in staff"

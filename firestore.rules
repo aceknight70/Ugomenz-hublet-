@@ -33,11 +33,6 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Showroom custom products rules
-    match /showroom_custom_products/{productId} {
-      allow read, write: if true;
-    }
-
     // Feedback rules - Seeding/submitting feedback
     match /feedback/{feedbackId} {
       allow read, write: if true;

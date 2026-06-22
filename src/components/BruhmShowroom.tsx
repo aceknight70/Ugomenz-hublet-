@@ -1,7 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { 
   Search, X, Maximize2, Tag, Layers, 
   Tv, Wind, Snowflake, ShoppingBag, Eye, 
@@ -165,12 +163,7 @@ export default function BruhmShowroom({ isLightMode = false }: { isLightMode?: b
   const [editingShowroomProd, setEditingShowroomProd] = useState<ShowroomProduct | null>(null);
   const [activeModalImageAngle, setActiveModalImageAngle] = useState<'front' | 'side' | 'back' | 'top'>('front');
 
-  const handleUpdateProduct = async (updatedProduct: ShowroomProduct) => {
-    const rawId = (updatedProduct["Product Code"] || '').trim();
-    if (!rawId) return;
-    const docId = rawId.replace(/[\/.\s#$\[\]]/g, '_');
-
-    // Optimistic local state update
+  const handleUpdateProduct = (updatedProduct: ShowroomProduct) => {
     setCustomProducts(prev => {
       const existingIdx = prev.findIndex(p => p["Product Code"].trim().toUpperCase() === updatedProduct["Product Code"].trim().toUpperCase());
       if (existingIdx >= 0) {
@@ -181,12 +174,6 @@ export default function BruhmShowroom({ isLightMode = false }: { isLightMode?: b
         return [...prev, updatedProduct];
       }
     });
-
-    try {
-      await setDoc(doc(db, 'showroom_custom_products', docId), updatedProduct);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `showroom_custom_products/${docId}`);
-    }
   };
 
   // Excel & Spreadsheet Import Mode/States
@@ -217,43 +204,6 @@ export default function BruhmShowroom({ isLightMode = false }: { isLightMode?: b
   useEffect(() => {
     localStorage.setItem('ug_showroom_custom_excel_products', JSON.stringify(customProducts));
   }, [customProducts]);
-
-  // Real-time Firestore sync across devices
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'showroom_custom_products'), (snapshot) => {
-      const list: ShowroomProduct[] = [];
-      snapshot.forEach(docSnap => {
-        list.push(docSnap.data() as ShowroomProduct);
-      });
-      if (snapshot.size > 0) {
-        setCustomProducts(list);
-      } else {
-        const saved = localStorage.getItem('ug_showroom_custom_excel_products');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved) as ShowroomProduct[];
-            if (parsed.length > 0) {
-              parsed.forEach(async (p) => {
-                const docId = (p["Product Code"] || '').trim().replace(/[\/.\s#$\[\]]/g, '_');
-                if (docId) {
-                  await setDoc(doc(db, 'showroom_custom_products', docId), p);
-                }
-              });
-            } else {
-              setCustomProducts([]);
-            }
-          } catch(e) {
-            setCustomProducts([]);
-          }
-        } else {
-          setCustomProducts([]);
-        }
-      }
-    }, (error) => {
-      console.warn("Firestore custom product subscription warning:", error);
-    });
-    return () => unsub();
-  }, []);
 
   // Unified lists of default catalog + any custom imported data 
   const showroomCatalog = useMemo(() => {
@@ -417,18 +367,6 @@ export default function BruhmShowroom({ isLightMode = false }: { isLightMode?: b
         }
       });
       return Array.from(uniqueMap.values());
-    });
-
-    // Bulk upload imported products to Firestore so they sync to other devices
-    cleaned.forEach(async (p) => {
-      const rawId = (p["Product Code"] || '').trim();
-      if (!rawId) return;
-      const docId = rawId.replace(/[\/.\s#$\[\]]/g, '_');
-      try {
-        await setDoc(doc(db, 'showroom_custom_products', docId), p);
-      } catch (err) {
-        console.error(`Failed to setDoc on ${rawId}`, err);
-      }
     });
 
     setImportStatus({
@@ -720,16 +658,7 @@ export default function BruhmShowroom({ isLightMode = false }: { isLightMode?: b
                   <button
                     onClick={() => {
                       if (window.confirm('Do you really want to clear all imported custom spreadsheet products?')) {
-                        customProducts.forEach(async (p) => {
-                          const docId = (p["Product Code"] || '').trim().replace(/[\/.\s#$\[\]]/g, '_');
-                          if (docId) {
-                            try {
-                              await deleteDoc(doc(db, 'showroom_custom_products', docId));
-                            } catch (err) {
-                              console.error(err);
-                            }
-                          }
-                        });
+                        setCustomProducts([]);
                         setImportStatus({type: 'success', message: 'Imported products wiped successfully.'});
                       }
                     }}
@@ -747,15 +676,8 @@ export default function BruhmShowroom({ isLightMode = false }: { isLightMode?: b
                         <p className="text-zinc-500 font-mono text-[8px] truncate">{p.Brand} · {p.Category}</p>
                       </div>
                       <button
-                        onClick={async () => {
-                          const docId = (p["Product Code"] || '').trim().replace(/[\/.\s#$\[\]]/g, '_');
-                          if (docId) {
-                            try {
-                              await deleteDoc(doc(db, 'showroom_custom_products', docId));
-                            } catch (err) {
-                              console.error(err);
-                            }
-                          }
+                        onClick={() => {
+                          setCustomProducts(prev => prev.filter(item => item["Product Code"] !== p["Product Code"]));
                         }}
                         className="p-1 hover:bg-zinc-805 text-zinc-500 hover:text-red-400 rounded"
                         title="Delete product"
